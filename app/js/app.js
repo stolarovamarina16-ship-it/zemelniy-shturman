@@ -7,6 +7,7 @@ const progressFill = document.getElementById('progress-fill');
 const progressLabel = document.getElementById('progress-label');
 
 let currentQuestion = 0;
+let currentQuestionIndex = 0; // отслеживаем номер текущего вопроса для кнопки «Назад»
 const answers = {};
 
 // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
@@ -52,9 +53,19 @@ function userMessage(text) {
   scrollBottom();
 }
 
-// Показать кнопки-варианты
-function showOptions(options, onChoose) {
+// Показать кнопки-варианты + кнопку «Назад» начиная со второго вопроса
+function showOptions(options, onChoose, questionIndex = 0) {
   inputArea.innerHTML = '';
+
+  // Кнопка «Назад» — появляется начиная со второго вопроса
+  if (questionIndex > 0) {
+    const backBtn = document.createElement('button');
+    backBtn.className = 'back-btn';
+    backBtn.innerHTML = '← Назад';
+    backBtn.onclick = () => goBack(questionIndex);
+    inputArea.appendChild(backBtn);
+  }
+
   const grid = document.createElement('div');
   grid.className = 'options-grid';
   options.forEach(opt => {
@@ -62,13 +73,30 @@ function showOptions(options, onChoose) {
     btn.className = 'option-btn';
     btn.textContent = opt.label;
     btn.onclick = () => {
-      // Блокируем все кнопки
       grid.querySelectorAll('button').forEach(b => b.disabled = true);
       onChoose(opt);
     };
     grid.appendChild(btn);
   });
   inputArea.appendChild(grid);
+}
+
+// Вернуться к предыдущему вопросу
+function goBack(fromIndex) {
+  // Удаляем ответ на текущий вопрос если он уже был дан
+  const currentQ = QUESTIONS[fromIndex];
+  if (currentQ) delete answers[currentQ.id];
+
+  clearInput();
+
+  // Маленькая плашка «вернулись назад» в чате
+  const el = document.createElement('div');
+  el.className = 'msg-back';
+  el.textContent = '↩ вернулись к предыдущему вопросу';
+  chat.appendChild(el);
+  scrollBottom();
+
+  setTimeout(() => askQuestion(fromIndex - 1), 200);
 }
 
 // Обновить прогресс-бар
@@ -180,8 +208,9 @@ function showFinalActions() {
 // ===== РОУТЕР ВОПРОСОВ =====
 
 function askQuestion(index) {
+  currentQuestionIndex = index; // запоминаем где находимся
+
   if (index >= QUESTIONS.length) {
-    // Все вопросы заданы — подбираем стратегию
     const strategies = pickStrategies(answers);
     showResult(strategies);
     return;
@@ -198,7 +227,7 @@ function askQuestion(index) {
       userMessage(chosen.label);
       clearInput();
       setTimeout(() => askQuestion(index + 1), 400);
-    });
+    }, index); // передаём index чтобы showOptions знал показывать ли «Назад»
   });
 }
 

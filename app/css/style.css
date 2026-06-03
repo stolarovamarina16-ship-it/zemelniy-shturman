@@ -213,6 +213,32 @@ body {
 
 .option-btn:active { transform: translateY(0); }
 
+/* Кнопка «Назад» */
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 4px 0 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color .15s;
+}
+
+.back-btn:hover { color: var(--green-mid); }
+
+/* Плашка «вернулись назад» в чате */
+.msg-back {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 0 4px;
+  opacity: .7;
+  animation: fadeUp .25s ease both;
+}
+
 /* Строка с текстовым инпутом */
 .text-row {
   display: flex;
