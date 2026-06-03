@@ -100,6 +100,8 @@ function showResult(strategies) {
           `<div class="step-item"><div class="step-num">${i+1}</div><div>${step}</div></div>`
         ).join('');
 
+        const hint = getStrategyHint(s, answers);
+
         const card = document.createElement('div');
         card.className = 'msg-agent';
         card.innerHTML = `
@@ -108,6 +110,7 @@ function showResult(strategies) {
             <div class="strategy-card">
               <div class="tag">${s.tag}</div>
               <h3>${s.title}</h3>
+              ${hint ? `<div style="margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,.15);border-radius:8px;font-size:13px;line-height:1.5;">${hint}</div>` : ''}
               <p class="desc">${s.desc}</p>
               <div class="steps-title">Первые шаги:</div>
               ${stepsHtml}
