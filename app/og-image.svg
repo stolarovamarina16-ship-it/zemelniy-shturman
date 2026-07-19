@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#152018"/>
+      <stop offset="1" stop-color="#0B120D"/>
+    </linearGradient>
+    <linearGradient id="needleGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8A33D"/>
+      <stop offset="1" stop-color="#C97B2E"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.82" cy="0.18" r="0.55">
+      <stop offset="0" stop-color="#3E5B3F" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3E5B3F" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- faint contour lines for topographic texture -->
+  <g fill="none" stroke="#E9E2D0" stroke-width="1" opacity="0.07">
+    <ellipse cx="980" cy="140" rx="260" ry="160"/>
+    <ellipse cx="980" cy="140" rx="200" ry="120"/>
+    <ellipse cx="980" cy="140" rx="140" ry="82"/>
+  </g>
+
+  <!-- Compass / sprout mark -->
+  <g transform="translate(110,150)">
+    <circle cx="60" cy="60" r="58" fill="none" stroke="#E9E2D0" stroke-width="2" opacity=".4"/>
+    <g stroke="#E9E2D0" stroke-width="1.6" opacity=".4">
+      <line x1="60" y1="-4" x2="60" y2="10"/>
+      <line x1="60" y1="110" x2="60" y2="124"/>
+      <line x1="-4" y1="60" x2="10" y2="60"/>
+      <line x1="110" y1="60" x2="124" y2="60"/>
+    </g>
+    <path d="M60 8 L72 60 L60 112 L48 60 Z" fill="url(#needleGrad)"/>
+    <path d="M60 8 L72 60 L60 60 Z" fill="#F4C878"/>
+    <path d="M28 92 C38 84 48 89 60 85 C72 89 82 84 92 92 L92 100 C92 100 78 95 60 95 C42 95 28 100 28 100 Z" fill="#5C8A5A" opacity=".9"/>
+    <circle cx="60" cy="60" r="6" fill="#0B120D"/>
+    <circle cx="60" cy="60" r="6" fill="none" stroke="#E9E2D0" stroke-width="1.4" opacity=".8"/>
+  </g>
+
+  <text x="110" y="400" font-family="Georgia, 'Times New Roman', serif" font-size="72" font-weight="700" fill="#F4EFE3" letter-spacing="-1">Земельный Штурман</text>
+  <text x="110" y="458" font-family="Georgia, 'Times New Roman', serif" font-size="30" fill="#C9BFA3">Курс на свой участок земли — без юриста и лишних нервов</text>
+
+  <g transform="translate(110,500)">
+    <rect x="0" y="0" width="185" height="40" rx="20" fill="none" stroke="#5C8A5A" stroke-width="1.5" opacity=".8"/>
+    <text x="24" y="26" font-family="Georgia, serif" font-size="18" fill="#9FC29D">11 стратегий</text>
+
+    <rect x="205" y="0" width="230" height="40" rx="20" fill="none" stroke="#5C8A5A" stroke-width="1.5" opacity=".8"/>
+    <text x="229" y="26" font-family="Georgia, serif" font-size="18" fill="#9FC29D">пошаговый маршрут</text>
+  </g>
+</svg>
