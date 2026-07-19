@@ -10,6 +10,15 @@ let currentQuestion = 0;
 let currentQuestionIndex = 0; // отслеживаем номер текущего вопроса для кнопки «Назад»
 const answers = {};
 
+// Иконка агента — компас с ростком (инлайн SVG вместо emoji, чтобы не превращалась
+// в пустой квадрат на устройствах без цветных emoji-шрифтов)
+const AGENT_AVATAR_SVG = `<svg width="17" height="17" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#C7DCC3" stroke-width="2.4" opacity=".55"/>
+  <path d="M32 13 L38 32 L32 51 L26 32 Z" fill="#E8A33D"/>
+  <path d="M32 13 L38 32 L32 32 Z" fill="#F4C878"/>
+  <circle cx="32" cy="32" r="3.6" fill="#0F1A12" stroke="#C7DCC3" stroke-width="1.2"/>
+</svg>`;
+
 // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
 
 function scrollBottom() {
@@ -23,7 +32,7 @@ function agentMessage(html, delay = 0) {
     const typingEl = document.createElement('div');
     typingEl.className = 'msg-agent';
     typingEl.innerHTML = `
-      <div class="agent-avatar">🗺️</div>
+      <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
       <div class="bubble-agent">
         <div class="typing"><span></span><span></span><span></span></div>
       </div>`;
@@ -35,7 +44,7 @@ function agentMessage(html, delay = 0) {
       const el = document.createElement('div');
       el.className = 'msg-agent';
       el.innerHTML = `
-        <div class="agent-avatar">🗺️</div>
+        <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
         <div class="bubble-agent">${html}</div>`;
       chat.appendChild(el);
       scrollBottom();
