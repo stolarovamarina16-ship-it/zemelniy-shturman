@@ -69,6 +69,15 @@ function pickStrategies(answers) {
   const { region, goal, form, adjacent, auctions } = answers;
   const result = [];
 
+  // Добавляет стратегию, только если она подходит под выбранную цель (suitable).
+  // Раньше поле suitable в strategies.js существовало, но нигде не проверялось —
+  // из-за этого, например, цели «Бизнес»/«Садоводство» могли получить Стратегию 1,
+  // которая явно рассчитана только на ИЖС/ЛПХ.
+  const add = (id) => {
+    const s = STRATEGIES[id];
+    if (s.suitable.includes(goal)) result.push(s);
+  };
+
   // --- Дальний Восток / Арктика → всегда Стратегия 7 ---
   if (region === "far_east") {
     return [STRATEGIES[7]];
@@ -79,30 +88,30 @@ function pickStrategies(answers) {
     result.push(STRATEGIES[5]);
     // Если готовы к торгам — добавить аренду через аукцион
     if (auctions === "yes" || auctions === "maybe") {
-      result.push(STRATEGIES[10]);
+      add(10);
     }
     return dedupe(result).slice(0, 2);
   }
 
   // --- Прирезка → Стратегия 8 (всегда добавляем первой, если есть смежный участок) ---
   if (adjacent === "yes") {
-    result.push(STRATEGIES[8]);
+    add(8);
   }
 
   // --- Через торги ---
   if (auctions === "yes" || auctions === "maybe") {
 
     if (form === "собственность" || form === "любое") {
-      result.push(STRATEGIES[9]); // торги → собственность
+      add(9); // торги → собственность
 
       // Банкротство — дополнительная опция при торгах для ИЖС и бизнеса
       if (goal === "ИЖС" || goal === "Бизнес") {
-        result.push(STRATEGIES[11]);
+        add(11);
       }
     }
 
     if (form === "аренда" || form === "любое") {
-      result.push(STRATEGIES[10]); // торги → аренда
+      add(10); // торги → аренда
     }
   }
 
@@ -110,23 +119,34 @@ function pickStrategies(answers) {
   if (auctions === "no" || auctions === "maybe") {
 
     if (form === "собственность" || form === "любое") {
-      result.push(STRATEGIES[1]); // без торгов → собственность
+      add(1); // без торгов → собственность
     }
 
     if (form === "аренда" || form === "любое") {
       // Базовая аренда без торгов
-      result.push(STRATEGIES[2]);
+      add(2);
 
       // Если ИЖС или ЛПХ + аренда — показываем стратегию 3 как альтернативу
       // (когда на участке уже есть зарегистрированный объект)
       if (goal === "ИЖС" || goal === "ЛПХ") {
-        result.push(STRATEGIES[3]);
+        add(3);
       }
     }
   }
 
-  // Убрать дубли, ограничить до 2 рекомендаций
-  return dedupe(result).slice(0, 2);
+  let final = dedupe(result).slice(0, 2);
+
+  // Фолбэк: для целей «Бизнес» и «Садоводство» большинство льгот без торгов
+  // (Стратегии 1, 3, 6) недоступны по закону — они рассчитаны на ИЖС/ЛПХ для личных нужд.
+  // Если после фильтра по suitable ничего не осталось, честно предлагаем ближайший
+  // вариант через торги вместо пустого результата.
+  if (final.length === 0) {
+    if (form === "собственность" || form === "любое") add(9);
+    if (form === "аренда" || form === "любое") add(10);
+    final = dedupe(result).slice(0, 2);
+  }
+
+  return final;
 }
 
 // ===== ОБЪЯСНЕНИЕ ВЫБОРА =====
@@ -139,6 +159,13 @@ function explainChoice(strategies, answers) {
 
   if (goal === "Сельское хозяйство") {
     return "Для сельскохозяйственных целей оптимальна аренда через упрощённую процедуру — без публикации и конкурса с другими претендентами.";
+  }
+
+  // Фолбэк-случай: пользователь хотел «без торгов», но для его цели
+  // такого варианта нет — все предложенные стратегии оказались через торги
+  if (auctions === "no" && strategies.length && strategies.every(s => s.auctions)) {
+    const names = strategies.map(s => `«${s.title}»`).join(" и ");
+    return `Для цели «${goal}» варианта без участия в торгах, к сожалению, нет — большинство льготных схем без аукциона рассчитаны на ИЖС и ЛПХ для личных нужд. Ближе всего к вашей ситуации ${names}: придётся пройти через торги.`;
   }
 
   const parts = [];
