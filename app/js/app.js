@@ -257,4 +257,15 @@ function startRouter() {
 }
 
 // ===== ЗАПУСК =====
-startRouter();
+// Роутер стартует по кнопке «Начать» на лендинге, не сразу при загрузке страницы
+const landing = document.getElementById('landing');
+const appRoot = document.querySelector('.app');
+
+document.getElementById('landing-start').addEventListener('click', () => {
+  landing.classList.add('landing-hide');
+  setTimeout(() => {
+    landing.style.display = 'none';
+    appRoot.classList.add('visible');
+    startRouter();
+  }, 300);
+});
