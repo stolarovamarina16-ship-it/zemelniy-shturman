@@ -395,6 +395,42 @@ function renderCadastreCalculator(region, form) {
   });
 }
 
+// Чек-лист того, что реально валит заявки на землю — не привязан к конкретной
+// стратегии, поэтому показывается один раз в результате, а не дублируется
+// в каждой из 11 карточек.
+const DUE_DILIGENCE_ITEMS = [
+  "Категория земель — для ИЖС нужны «земли населённых пунктов». Участок сельхозназначения не подойдёт под дом, даже если он свободен и найден на НСПД.",
+  "ВРИ и ЗОУИТ — по ПЗЗ проверьте разрешённый вид использования и нет ли зоны с особыми условиями (охранная зона газопровода/ЛЭП, водоохранная, санитарная). Это самая частая причина отказа.",
+  "Наложение с лесным фондом — сверьте участок с публичной лесной картой Рослесхоза. Расхождения между Росреестром и гослесреестром блокируют даже полностью законные участки.",
+  "Доступ к участку — есть ли дорога или сервитут. Участок без подъезда почти невозможно освоить и застроить.",
+  "Стоимость подключения коммуникаций — узнайте цену техприсоединения (свет, вода, газ) у сетевых компаний до подачи заявления. Иногда она выше стоимости самого участка.",
+  "Обременения — перед торгами закажите выписку ЕГРН и убедитесь, что нет ареста, ипотеки или судебного спора.",
+  "Срок освоения — по большинству бесплатных и льготных схем участок нужно начать осваивать в течение 3 лет (закон с 2025 года), иначе есть риск изъятия."
+];
+
+function renderDueDiligenceChecklist() {
+  return new Promise((resolve) => {
+    const itemsHtml = DUE_DILIGENCE_ITEMS.map((item, i) =>
+      `<div class="step-item"><div class="step-num">${i + 1}</div><div>${item}</div></div>`
+    ).join('');
+
+    const el = document.createElement('div');
+    el.className = 'msg-agent';
+    el.innerHTML = `
+      <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
+      <div class="bubble-agent" style="padding:0; overflow:hidden; border-radius: 4px 16px 16px 16px;">
+        <div class="strategy-card">
+          <div class="tag">🔍 Проверьте перед подачей</div>
+          <h3>Что реально валит заявки</h3>
+          ${itemsHtml}
+        </div>
+      </div>`;
+    chat.appendChild(el);
+    scrollBottom();
+    resolve();
+  });
+}
+
 function showResult(strategies) {
   clearInput();
   progressWrap.style.display = 'none';
@@ -406,6 +442,8 @@ function showResult(strategies) {
   // Сообщение с объяснением
   agentMessage(`Отлично! Я проанализировал ваши ответы. ${explanation}`).then(() => {
     return regionNote ? agentMessage(regionNote) : Promise.resolve();
+  }).then(() => {
+    return renderDueDiligenceChecklist();
   }).then(() => {
     return region ? renderCadastreCalculator(region, answers.form) : Promise.resolve();
   }).then(() => {
