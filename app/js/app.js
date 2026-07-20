@@ -90,6 +90,70 @@ function showOptions(options, onChoose, questionIndex = 0) {
   inputArea.appendChild(grid);
 }
 
+// Показать поле поиска с автодополнением — для вопросов с длинным списком (83 региона),
+// где кнопки-варианты неюзабельны
+function showSearchSelect(q, onChoose, questionIndex = 0) {
+  inputArea.innerHTML = '';
+
+  if (questionIndex > 0) {
+    const backBtn = document.createElement('button');
+    backBtn.className = 'back-btn';
+    backBtn.innerHTML = '← Назад';
+    backBtn.onclick = () => goBack(questionIndex);
+    inputArea.appendChild(backBtn);
+  }
+
+  const datalistId = `dl-${q.id}`;
+  const datalist = document.createElement('datalist');
+  datalist.id = datalistId;
+  q.options.forEach(opt => {
+    const optEl = document.createElement('option');
+    optEl.value = opt.label;
+    datalist.appendChild(optEl);
+  });
+  inputArea.appendChild(datalist);
+
+  const row = document.createElement('div');
+  row.className = 'text-row';
+
+  const inp = document.createElement('input');
+  inp.className = 'text-input';
+  inp.placeholder = 'Начните вводить название региона...';
+  inp.type = 'text';
+  inp.setAttribute('list', datalistId);
+  inp.addEventListener('input', () => inp.classList.remove('input-error'));
+
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'send-btn';
+  sendBtn.textContent = 'Выбрать';
+
+  const handleSend = () => {
+    const typed = inp.value.trim();
+    const match = q.options.find(o => o.label.toLowerCase() === typed.toLowerCase());
+    if (!match) {
+      inp.classList.add('input-error');
+      return;
+    }
+    onChoose(match);
+  };
+
+  sendBtn.onclick = handleSend;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') handleSend(); });
+
+  row.appendChild(inp);
+  row.appendChild(sendBtn);
+  inputArea.appendChild(row);
+
+  if (q.skipOption) {
+    const skipBtn = document.createElement('button');
+    skipBtn.className = 'option-btn';
+    skipBtn.style.marginTop = '10px';
+    skipBtn.textContent = q.skipOption.label;
+    skipBtn.onclick = () => onChoose(q.skipOption);
+    inputArea.appendChild(skipBtn);
+  }
+}
+
 // Вернуться к предыдущему вопросу
 function goBack(fromIndex) {
   // Удаляем ответ на текущий вопрос если он уже был дан
@@ -105,7 +169,10 @@ function goBack(fromIndex) {
   chat.appendChild(el);
   scrollBottom();
 
-  setTimeout(() => askQuestion(fromIndex - 1), 200);
+  let target = fromIndex - 1;
+  while (target >= 0 && isSkipped(QUESTIONS[target])) target--;
+
+  setTimeout(() => askQuestion(Math.max(target, 0)), 200);
 }
 
 // Обновить прогресс-бар
@@ -127,9 +194,12 @@ function showResult(strategies) {
   progressWrap.style.display = 'none';
 
   const explanation = explainChoice(strategies, answers);
+  const regionNote = getRegionRateNote(answers);
 
   // Сообщение с объяснением
   agentMessage(`Отлично! Я проанализировал ваши ответы. ${explanation}`).then(() => {
+    return regionNote ? agentMessage(regionNote) : Promise.resolve();
+  }).then(() => {
 
     strategies.forEach((s, idx) => {
       setTimeout(() => {
@@ -216,7 +286,15 @@ function showFinalActions() {
 
 // ===== РОУТЕР ВОПРОСОВ =====
 
+// Вопрос пропускается, если для текущих ответов не имеет смысла
+// (например, выбор конкретного региона не нужен для программы ДВ-гектар)
+function isSkipped(q) {
+  return !!(q && typeof q.skipIf === 'function' && q.skipIf(answers));
+}
+
 function askQuestion(index) {
+  while (index < QUESTIONS.length && isSkipped(QUESTIONS[index])) index++;
+
   currentQuestionIndex = index; // запоминаем где находимся
 
   if (index >= QUESTIONS.length) {
@@ -231,12 +309,18 @@ function askQuestion(index) {
   agentMessage(
     `<strong>${q.text}</strong>${q.hint ? `<br><span style="font-size:13px;opacity:.7;margin-top:4px;display:block">${q.hint}</span>` : ''}`
   ).then(() => {
-    showOptions(q.options, (chosen) => {
+    const onChoose = (chosen) => {
       answers[q.id] = chosen.value;
       userMessage(chosen.label);
       clearInput();
       setTimeout(() => askQuestion(index + 1), 400);
-    }, index); // передаём index чтобы showOptions знал показывать ли «Назад»
+    };
+
+    if (q.type === 'select') {
+      showSearchSelect(q, onChoose, index);
+    } else {
+      showOptions(q.options, onChoose, index);
+    }
   });
 }
 

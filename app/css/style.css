@@ -349,6 +349,11 @@ body {
   box-shadow: 0 0 0 3px rgba(92,138,90,.15);
 }
 
+.text-input.input-error {
+  border-color: #c0392b;
+  box-shadow: 0 0 0 3px rgba(192,57,43,.15);
+}
+
 .send-btn {
   background: linear-gradient(155deg, var(--ochre-light), var(--ochre));
   color: var(--forest-950);

@@ -12,6 +12,17 @@ const QUESTIONS = [
     ]
   },
   {
+    id: "region_ru",
+    type: "select",
+    text: "Уточните свой регион 📍",
+    hint: "Покажу точную ставку выкупа участка именно для вашего региона",
+    options: REGIONS.map(r => ({ label: r.name, value: r.id })),
+    skipOption: { label: "🤷 Пропустить, пока не знаю", value: "" },
+    // Вопрос не нужен, если уже выбрана программа ДВ-гектар/Арктики —
+    // там своя отдельная схема, региональные ставки выкупа к ней не применяются
+    skipIf: (answers) => answers.region === "far_east"
+  },
+  {
     id: "goal",
     text: "Что планируете делать с землёй? 🎯",
     hint: "Это определяет вид разрешённого использования (ВРИ)",
@@ -193,6 +204,27 @@ function explainChoice(strategies, answers) {
   const names = strategies.map(s => `«${s.title}»`).join(" и ");
 
   return `Исходя из ваших ответов${parts.length ? " (" + parts.join(", ") + ")" : ""}, вам подойдёт ${names}.`;
+}
+
+// ===== СТАВКА ВЫКУПА ПО РЕГИОНУ (на основе базы region-data.js) =====
+function getRegionRateNote(answers) {
+  const regionId = answers.region_ru;
+  if (!regionId) return null; // пользователь пропустил вопрос или ДВ-гектар
+
+  const region = findRegion(regionId);
+  if (!region) return null;
+
+  const { form } = answers;
+  let line;
+  if (form === "аренда") {
+    line = `при выкупе после аренды — <strong>${region.lease}</strong> от кадастровой стоимости`;
+  } else if (form === "собственность") {
+    line = `при оформлении сразу в собственность — <strong>${region.buyout}</strong> от кадастровой стоимости`;
+  } else {
+    line = `сразу в собственность — <strong>${region.buyout}</strong>, через аренду — <strong>${region.lease}</strong> от кадастровой стоимости`;
+  }
+
+  return `📍 Ставка выкупа в вашем регионе (${region.name}): ${line}. Ставка актуальна на июнь 2026 — обязательно проверьте текущую редакцию регионального закона перед началом действий.`;
 }
 
 // ===== ПОДСКАЗКА К СТРАТЕГИИ (дополнительный контекст) =====
