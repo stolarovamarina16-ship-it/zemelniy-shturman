@@ -354,6 +354,41 @@ body {
   box-shadow: 0 0 0 3px rgba(192,57,43,.15);
 }
 
+.search-select-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.autocomplete-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 62px;
+  background: var(--white);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 20;
+}
+
+.autocomplete-item {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--forest-900);
+  cursor: pointer;
+  transition: background .12s;
+}
+
+.autocomplete-item:hover {
+  background: var(--moss-pale);
+}
+
+.autocomplete-item + .autocomplete-item {
+  border-top: 1px solid var(--paper-dim);
+}
+
 .send-btn {
   background: linear-gradient(155deg, var(--ochre-light), var(--ochre));
   color: var(--forest-950);

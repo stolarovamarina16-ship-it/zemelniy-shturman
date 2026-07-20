@@ -90,8 +90,54 @@ function showOptions(options, onChoose, questionIndex = 0) {
   inputArea.appendChild(grid);
 }
 
-// Показать поле поиска с автодополнением — для вопросов с длинным списком (83 региона),
-// где кнопки-варианты неюзабельны
+// Длина общего префикса двух строк — нужна для нечёткого поиска (см. matchRegionOptions)
+function commonPrefixLen(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+}
+
+// Служебные слова названий регионов — исключаем их из нечёткого сравнения,
+// иначе "Красн..." ложно совпадает с любым "...край" по общему префиксу "кра"
+const REGION_STOPWORDS = new Set([
+  'область', 'край', 'края', 'республика', 'автономный', 'округ', 'ао',
+  'г', 'город', 'мораторий', 'до', 'года'
+]);
+
+// Подобрать варианты по введённому тексту: города часто не совпадают буква-в-букву
+// с названием региона из-за окончания прилагательного (Саратов → Саратовская,
+// Тверь → Тверская, Пермь → Пермский) — поэтому помимо вхождения подстроки
+// проверяем длину общего префикса с каждым значимым словом в названии региона
+function matchRegionOptions(options, typed) {
+  const t = typed.trim().toLowerCase();
+  if (!t) return [];
+
+  const prefixThreshold = Math.min(t.length, 3);
+
+  const scored = options.map(opt => {
+    const nameLower = opt.label.toLowerCase();
+    if (nameLower.includes(t)) {
+      return { opt, score: 1000 - nameLower.indexOf(t) };
+    }
+    const words = nameLower
+      .replace(/[^а-яё\s-]/g, ' ')
+      .split(/[\s-]+/)
+      .filter(w => w && !REGION_STOPWORDS.has(w));
+    let best = 0;
+    words.forEach(w => {
+      const cp = commonPrefixLen(t, w);
+      if (cp > best) best = cp;
+    });
+    return best >= prefixThreshold ? { opt, score: best } : null;
+  }).filter(Boolean);
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 8).map(s => s.opt);
+}
+
+// Показать поле поиска с живой подсказкой — для вопросов с длинным списком (83 региона),
+// где кнопки-варианты неюзабельны. Подсказки фильтруются по мере ввода и учитывают
+// частичные/городские названия, а не только точное совпадение с полным названием региона.
 function showSearchSelect(q, onChoose, questionIndex = 0) {
   inputArea.innerHTML = '';
 
@@ -103,38 +149,81 @@ function showSearchSelect(q, onChoose, questionIndex = 0) {
     inputArea.appendChild(backBtn);
   }
 
-  const datalistId = `dl-${q.id}`;
-  const datalist = document.createElement('datalist');
-  datalist.id = datalistId;
-  q.options.forEach(opt => {
-    const optEl = document.createElement('option');
-    optEl.value = opt.label;
-    datalist.appendChild(optEl);
-  });
-  inputArea.appendChild(datalist);
+  const wrap = document.createElement('div');
+  wrap.className = 'search-select-wrap';
 
   const row = document.createElement('div');
   row.className = 'text-row';
 
   const inp = document.createElement('input');
   inp.className = 'text-input';
-  inp.placeholder = 'Начните вводить название региона...';
+  inp.placeholder = 'Начните вводить город или регион...';
   inp.type = 'text';
-  inp.setAttribute('list', datalistId);
-  inp.addEventListener('input', () => inp.classList.remove('input-error'));
+  inp.autocomplete = 'off';
 
   const sendBtn = document.createElement('button');
   sendBtn.className = 'send-btn';
   sendBtn.textContent = 'Выбрать';
 
-  const handleSend = () => {
-    const typed = inp.value.trim();
-    const match = q.options.find(o => o.label.toLowerCase() === typed.toLowerCase());
-    if (!match) {
-      inp.classList.add('input-error');
+  const suggestList = document.createElement('div');
+  suggestList.className = 'autocomplete-list';
+  suggestList.style.display = 'none';
+
+  const selectMatch = (match) => {
+    suggestList.style.display = 'none';
+    onChoose(match);
+  };
+
+  const renderSuggestions = () => {
+    const matches = matchRegionOptions(q.options, inp.value);
+    suggestList.innerHTML = '';
+
+    if (!matches.length) {
+      suggestList.style.display = 'none';
       return;
     }
-    onChoose(match);
+
+    matches.forEach(opt => {
+      const item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      item.textContent = opt.label;
+      // mousedown вместо click — срабатывает раньше blur на инпуте, клик не теряется
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        inp.value = opt.label;
+        selectMatch(opt);
+      });
+      suggestList.appendChild(item);
+    });
+
+    suggestList.style.display = 'block';
+  };
+
+  inp.addEventListener('input', () => {
+    inp.classList.remove('input-error');
+    renderSuggestions();
+  });
+  inp.addEventListener('focus', renderSuggestions);
+  inp.addEventListener('blur', () => {
+    setTimeout(() => { suggestList.style.display = 'none'; }, 150);
+  });
+
+  const handleSend = () => {
+    const typed = inp.value.trim();
+    const exact = q.options.find(o => o.label.toLowerCase() === typed.toLowerCase());
+    if (exact) {
+      selectMatch(exact);
+      return;
+    }
+    // Если после нечёткого поиска остался единственный вариант — считаем его выбором
+    const fuzzy = matchRegionOptions(q.options, typed);
+    if (fuzzy.length === 1) {
+      inp.value = fuzzy[0].label;
+      selectMatch(fuzzy[0]);
+      return;
+    }
+    inp.classList.add('input-error');
+    renderSuggestions();
   };
 
   sendBtn.onclick = handleSend;
@@ -142,7 +231,9 @@ function showSearchSelect(q, onChoose, questionIndex = 0) {
 
   row.appendChild(inp);
   row.appendChild(sendBtn);
-  inputArea.appendChild(row);
+  wrap.appendChild(row);
+  wrap.appendChild(suggestList);
+  inputArea.appendChild(wrap);
 
   if (q.skipOption) {
     const skipBtn = document.createElement('button');
