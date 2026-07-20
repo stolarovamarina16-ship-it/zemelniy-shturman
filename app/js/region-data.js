@@ -99,3 +99,13 @@ const REGIONS = [
 function findRegion(id) {
   return REGIONS.find(r => r.id === id) || null;
 }
+
+// Превратить строку ставки в число (%), только если это "чистый" процент вида "100% (п.2)".
+// Для формул/диапазонов/условий ("ставка налога × 10", "3%; 5–9%; ...") возвращает null —
+// для них точную сумму посчитать нельзя, только показать текст ставки как есть.
+function parseRatePercent(rateStr) {
+  if (!rateStr) return null;
+  const m = rateStr.match(/^(\d+(?:,\d+)?)%\s*\(/);
+  if (!m) return null;
+  return parseFloat(m[1].replace(',', '.'));
+}
