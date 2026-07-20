@@ -280,16 +280,134 @@ function clearInput() {
 
 // ===== ПОКАЗАТЬ РЕЗУЛЬТАТ =====
 
+// Число с пробелами между разрядами, ₽
+function formatMoney(n) {
+  return Math.round(n).toLocaleString('ru-RU') + ' ₽';
+}
+
+// Ставка, применимая к выбранной пользователем форме получения земли
+function getApplicableRate(region, form) {
+  if (form === 'аренда') {
+    return { label: 'при выкупе после аренды', str: region.lease, percent: parseRatePercent(region.lease) };
+  }
+  return { label: 'при оформлении сразу в собственность', str: region.buyout, percent: parseRatePercent(region.buyout) };
+}
+
+// Калькулятор итоговой цены выкупа: кадастровый номер (автопоиск, best-effort через
+// /api/cadastre) или ручной ввод кадастровой стоимости × ставка региона.
+// Автопоиск может не сработать (НСПД блокирует часть запросов с зарубежных серверов) —
+// в этом случае просто предлагаем вписать стоимость вручную, калькулятор работает и без него.
+function renderCadastreCalculator(region, form) {
+  return new Promise((resolve) => {
+    const rate = getApplicableRate(region, form);
+
+    const el = document.createElement('div');
+    el.className = 'msg-agent';
+    el.innerHTML = `
+      <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
+      <div class="bubble-agent">
+        <div class="cadastre-calc">
+          <div style="font-weight:600;margin-bottom:10px;">💰 Посчитать сумму выкупа</div>
+        </div>
+      </div>`;
+    const calcWrap = el.querySelector('.cadastre-calc');
+
+    const lookupRow = document.createElement('div');
+    lookupRow.className = 'text-row';
+    const numberInp = document.createElement('input');
+    numberInp.className = 'text-input';
+    numberInp.type = 'text';
+    numberInp.placeholder = 'Кадастровый номер, напр. 50:11:0010101:100 (необязательно)';
+    const lookupBtn = document.createElement('button');
+    lookupBtn.className = 'send-btn';
+    lookupBtn.textContent = 'Найти стоимость';
+    lookupRow.appendChild(numberInp);
+    lookupRow.appendChild(lookupBtn);
+
+    const lookupStatus = document.createElement('div');
+    lookupStatus.style.cssText = 'font-size:12px;opacity:.7;margin-top:6px;min-height:16px;';
+
+    const valueRow = document.createElement('div');
+    valueRow.className = 'text-row';
+    valueRow.style.marginTop = '10px';
+    const valueInp = document.createElement('input');
+    valueInp.className = 'text-input';
+    valueInp.type = 'text';
+    valueInp.inputMode = 'numeric';
+    valueInp.placeholder = 'Кадастровая стоимость участка, ₽';
+    const calcBtn = document.createElement('button');
+    calcBtn.className = 'send-btn';
+    calcBtn.textContent = 'Посчитать';
+    valueRow.appendChild(valueInp);
+    valueRow.appendChild(calcBtn);
+
+    const resultBox = document.createElement('div');
+    resultBox.style.cssText = 'margin-top:10px;font-size:14px;line-height:1.5;';
+
+    lookupBtn.onclick = () => {
+      const number = numberInp.value.trim();
+      if (!/^\d{2}:\d{2}:\d{6,7}:\d+$/.test(number)) {
+        lookupStatus.textContent = 'Формат номера: XX:XX:XXXXXXX:XX — либо впишите стоимость вручную ниже';
+        return;
+      }
+      lookupBtn.disabled = true;
+      lookupStatus.textContent = 'Ищу...';
+      fetch(`/api/cadastre?number=${encodeURIComponent(number)}`)
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          lookupBtn.disabled = false;
+          if (ok && data.cadCost) {
+            valueInp.value = String(Math.round(data.cadCost));
+            lookupStatus.textContent = `Найдено: ${formatMoney(data.cadCost)} ✓`;
+          } else {
+            lookupStatus.textContent = 'Не удалось найти автоматически (реестр недоступен) — впишите стоимость вручную ниже';
+          }
+        })
+        .catch(() => {
+          lookupBtn.disabled = false;
+          lookupStatus.textContent = 'Не удалось найти автоматически — впишите стоимость вручную ниже';
+        });
+    };
+
+    calcBtn.onclick = () => {
+      const raw = valueInp.value.replace(/[^\d.,]/g, '').replace(',', '.');
+      const value = parseFloat(raw);
+      if (!value || value <= 0) {
+        resultBox.innerHTML = '<span style="opacity:.7">Впишите кадастровую стоимость числом</span>';
+        return;
+      }
+      if (rate.percent !== null) {
+        const total = value * rate.percent / 100;
+        resultBox.innerHTML = `Ставка ${rate.label} в «${region.name}»: <strong>${rate.percent}%</strong><br>Итоговая цена выкупа: <strong>${formatMoney(total)}</strong>`;
+      } else {
+        resultBox.innerHTML = `В вашем регионе ставка задана формулой/диапазоном: <strong>${rate.str}</strong><br>Точную сумму так не посчитать — нужны дополнительные данные (например, ставка земельного налога на участок). Уточните точный расчёт в администрации.`;
+      }
+    };
+
+    calcWrap.appendChild(lookupRow);
+    calcWrap.appendChild(lookupStatus);
+    calcWrap.appendChild(valueRow);
+    calcWrap.appendChild(resultBox);
+
+    chat.appendChild(el);
+    scrollBottom();
+    resolve();
+  });
+}
+
 function showResult(strategies) {
   clearInput();
   progressWrap.style.display = 'none';
 
   const explanation = explainChoice(strategies, answers);
   const regionNote = getRegionRateNote(answers);
+  const region = answers.region_ru ? findRegion(answers.region_ru) : null;
 
   // Сообщение с объяснением
   agentMessage(`Отлично! Я проанализировал ваши ответы. ${explanation}`).then(() => {
     return regionNote ? agentMessage(regionNote) : Promise.resolve();
+  }).then(() => {
+    return region ? renderCadastreCalculator(region, answers.form) : Promise.resolve();
   }).then(() => {
 
     strategies.forEach((s, idx) => {
