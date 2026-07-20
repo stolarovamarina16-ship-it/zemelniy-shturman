@@ -431,6 +431,130 @@ function renderDueDiligenceChecklist() {
   });
 }
 
+// Чек-лист документов для подачи заявления — общий пакет для большинства
+// из 11 стратегий (без-торгов и с торгами). Ссылки ведут на официальные
+// государственные порталы, где документ готовится/заказывается.
+const DOCUMENT_CHECKLIST_ITEMS = [
+  {
+    text: "Заявление о предварительном согласовании предоставления земельного участка (или о предоставлении, если участок уже стоит на кадастровом учёте).",
+    linkLabel: "Госуслуги",
+    linkUrl: "https://www.gosuslugi.ru"
+  },
+  {
+    text: "Схема расположения земельного участка (СРЗУ) — готовится на публичной кадастровой карте, если участок ещё не сформирован.",
+    linkLabel: "НСПД",
+    linkUrl: "https://nspd.gov.ru"
+  },
+  {
+    text: "Копия паспорта (документ, удостоверяющий личность) — прикладывается к заявлению."
+  },
+  {
+    text: "Выписка из ЕГРН на участок (если уже стоит на кадастровом учёте) — подтверждает отсутствие правообладателя и обременений.",
+    linkLabel: "Росреестр",
+    linkUrl: "https://rosreestr.gov.ru"
+  },
+  {
+    text: "Правоустанавливающие документы на дом на участке — нужны для стратегий, где право на землю следует из права на строение.",
+    linkLabel: "Росреестр",
+    linkUrl: "https://rosreestr.gov.ru"
+  },
+  {
+    text: "Нотариальное согласие супруга на сделку — если участок оформляется в браке. Оформляется у любого нотариуса."
+  },
+  {
+    text: "Подтверждение льготной категории (многодетная семья, ветеран, молодой специалист и т.п.) — если претендуете на льготную схему получения."
+  },
+  {
+    text: "Нотариальная доверенность — если документы подаёт представитель, а не сам заявитель."
+  }
+];
+
+function renderDocumentChecklist() {
+  return new Promise((resolve) => {
+    const itemsHtml = DOCUMENT_CHECKLIST_ITEMS.map((item, i) => `
+      <div class="step-item">
+        <div class="step-num">${i + 1}</div>
+        <div>${item.text}${item.linkUrl ? ` <a href="${item.linkUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--ochre-light);white-space:nowrap;">→ ${item.linkLabel}</a>` : ''}</div>
+      </div>`
+    ).join('');
+
+    const el = document.createElement('div');
+    el.className = 'msg-agent';
+    el.innerHTML = `
+      <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
+      <div class="bubble-agent" style="padding:0; overflow:hidden; border-radius: 4px 16px 16px 16px;">
+        <div class="strategy-card">
+          <div class="tag">📄 Пакет документов</div>
+          <h3>Что понадобится для подачи</h3>
+          ${itemsHtml}
+        </div>
+      </div>`;
+    chat.appendChild(el);
+    scrollBottom();
+    resolve();
+  });
+}
+
+// Захват e-mail — заглушка. Пока не подключён бэкенд (см. PLAN.md, Этап 7/9),
+// поэтому просто подтверждаем и не отправляем данные никуда. TODO: подключить
+// сохранение (Supabase/таблица) и реальную отправку письма с результатом.
+function renderEmailCapture() {
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.className = 'msg-agent';
+    el.innerHTML = `
+      <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
+      <div class="bubble-agent" style="padding:0; overflow:hidden; border-radius: 4px 16px 16px 16px;">
+        <div class="strategy-card">
+          <div class="tag">📩 Не потерять результат</div>
+          <h3>Пришлём разбор на почту</h3>
+          <p class="desc">Оставьте e-mail — сохраним вашу стратегию и чек-листы, чтобы не искать их заново.</p>
+        </div>
+      </div>`;
+
+    const cardBody = el.querySelector('.strategy-card');
+
+    const row = document.createElement('div');
+    row.className = 'text-row';
+
+    const input = document.createElement('input');
+    input.className = 'text-input';
+    input.type = 'email';
+    input.placeholder = 'ваш@email.ru';
+
+    const btn = document.createElement('button');
+    btn.className = 'send-btn';
+    btn.textContent = 'Отправить';
+
+    const handleSubmit = () => {
+      const email = input.value.trim();
+      if (!email || !email.includes('@')) {
+        input.classList.add('input-error');
+        return;
+      }
+      input.classList.remove('input-error');
+      row.remove();
+      const thanks = document.createElement('p');
+      thanks.className = 'desc';
+      thanks.style.marginTop = '12px';
+      thanks.textContent = 'Спасибо! Пока это заглушка — рассылку результатов подключим на следующем шаге, письмо на ' + email + ' не уйдёт.';
+      cardBody.appendChild(thanks);
+      scrollBottom();
+    };
+
+    btn.onclick = handleSubmit;
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') handleSubmit(); });
+
+    row.appendChild(input);
+    row.appendChild(btn);
+    cardBody.appendChild(row);
+
+    chat.appendChild(el);
+    scrollBottom();
+    resolve();
+  });
+}
+
 function showResult(strategies) {
   clearInput();
   progressWrap.style.display = 'none';
@@ -444,6 +568,10 @@ function showResult(strategies) {
     return regionNote ? agentMessage(regionNote) : Promise.resolve();
   }).then(() => {
     return renderDueDiligenceChecklist();
+  }).then(() => {
+    return renderDocumentChecklist();
+  }).then(() => {
+    return renderEmailCapture();
   }).then(() => {
     return region ? renderCadastreCalculator(region, answers.form) : Promise.resolve();
   }).then(() => {
