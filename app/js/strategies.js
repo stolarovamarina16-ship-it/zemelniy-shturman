@@ -215,3 +215,7 @@ const STRATEGIES = {
   }
 
 };
+
+// Доступно и в браузере (глобальная const выше), и в Node — сервер использует те же
+// данные для системного промпта AI-ответов, без дублирования базы стратегий.
+if (typeof module !== 'undefined') module.exports = STRATEGIES;

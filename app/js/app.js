@@ -645,8 +645,22 @@ function showFinalActions() {
     if (!q) return;
     userMessage(q);
     inp.value = '';
-    // Заглушка — позже подключим Claude API
-    agentMessage('Я принял ваш вопрос. Функция ответов через AI будет добавлена на следующем шаге. Пока используйте роутер стратегий выше 👆');
+    sendBtn.disabled = true;
+
+    fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q })
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        const answer = ok
+          ? data.answer
+          : 'Не получилось получить ответ прямо сейчас — попробуйте ещё раз чуть позже или посмотрите стратегии выше 👆';
+        return agentMessage(answer.replace(/\n/g, '<br>'));
+      })
+      .catch(() => agentMessage('Не получилось связаться с сервером. Проверьте подключение и попробуйте снова.'))
+      .finally(() => { sendBtn.disabled = false; });
   };
 
   sendBtn.onclick = handleSend;

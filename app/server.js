@@ -6,11 +6,14 @@
 const express = require('express');
 const path = require('path');
 const cadastreHandler = require('./api/cadastre.js');
+const askHandler = require('./api/ask.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/api/cadastre', cadastreHandler);
+app.use(express.json());
+app.post('/api/ask', askHandler);
 app.use(express.static(__dirname));
 
 app.listen(PORT, () => {
