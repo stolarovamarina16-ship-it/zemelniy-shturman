@@ -332,6 +332,11 @@ body {
 .case-facts dd { color: var(--forest-900); font-weight: 700; margin: 0; }
 .case-edit-btn { margin-top: 13px; border: 1px solid rgba(92,138,90,.45); border-radius: 8px; padding: 8px 11px; background: var(--white); color: var(--forest-900); font: 700 12px inherit; cursor: pointer; }
 .case-edit-btn:hover { background: var(--moss-pale); }
+.case-passport-btn { margin-left: 7px; }
+.plot-passport-form .service-link-row { margin: 0 0 3px; }
+.passport-source-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }
+.passport-source-row a { border: 1px solid rgba(92,138,90,.35); border-radius: 999px; padding: 5px 8px; background: rgba(255,255,255,.7); color: var(--forest-900); font-size: 11px; font-weight: 800; text-decoration: none; }
+.passport-source-row a:hover { background: var(--moss-pale); }
 .case-form { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 15px; background: var(--white); box-shadow: var(--shadow-sm); }
 .case-form-title { color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 19px; font-weight: 600; }
 .case-form > p { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
