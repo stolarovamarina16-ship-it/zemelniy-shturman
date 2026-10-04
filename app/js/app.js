@@ -9,6 +9,8 @@ const progressLabel = document.getElementById('progress-label');
 let currentQuestion = 0;
 let currentQuestionIndex = 0; // отслеживаем номер текущего вопроса для кнопки «Назад»
 const answers = {};
+// Последние реплики дают агенту контекст, но не хранятся на сервере.
+let conversationHistory = [];
 
 // Иконка агента — компас с ростком (инлайн SVG вместо emoji, чтобы не превращалась
 // в пустой квадрат на устройствах без цветных emoji-шрифтов)
@@ -290,6 +292,88 @@ function updateProgress(step, total) {
 // Очистить зону ввода
 function clearInput() {
   inputArea.innerHTML = '';
+}
+
+// ===== ДИАЛОГОВЫЙ АГЕНТ =====
+
+function showAgentComposer() {
+  inputArea.innerHTML = '';
+  const quick = document.createElement('div');
+  quick.className = 'agent-quick-actions';
+  [
+    ['Найти путь получения', 'Хочу получить участок от государства. Помоги выбрать самый реалистичный путь и начни с ближайшего шага.'],
+    ['Проверить участок', 'Хочу проверить участок перед заявлением или торгами. Дай мне порядок проверки по официальным источникам.'],
+    ['Разобрать отказ или документ', 'Мне пришёл отказ или есть документ по земле. Подскажи, какие сведения из него важны и что делать дальше.']
+  ].forEach(([label, prompt]) => {
+    const button = document.createElement('button');
+    button.className = 'agent-quick-btn';
+    button.textContent = label;
+    button.addEventListener('click', () => sendAgentQuestion(prompt, label));
+    quick.appendChild(button);
+  });
+
+  const row = document.createElement('div');
+  row.className = 'text-row agent-composer-row';
+  const inp = document.createElement('textarea');
+  inp.className = 'text-input agent-textarea';
+  inp.placeholder = 'Например: «Хочу участок под дом в Тверской области, с чего начать?»';
+  inp.rows = 2;
+  inp.setAttribute('aria-label', 'Ваш вопрос Земельному Штурману');
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'send-btn';
+  sendBtn.textContent = 'Спросить';
+  const send = () => {
+    const question = inp.value.trim();
+    if (!question) return;
+    inp.value = '';
+    sendAgentQuestion(question, question, sendBtn);
+  };
+  sendBtn.addEventListener('click', send);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+  row.append(inp, sendBtn);
+
+  const interview = document.createElement('button');
+  interview.className = 'agent-interview-link';
+  interview.textContent = 'Не знаю, с чего начать — пройти короткое интервью';
+  interview.addEventListener('click', startRouter);
+  inputArea.append(quick, row, interview);
+}
+
+function sendAgentQuestion(question, displayText = question, button = null) {
+  if (button) button.disabled = true;
+  userMessage(displayText);
+  clearInput();
+  fetch('/api/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, history: conversationHistory })
+  })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+      const answer = ok
+        ? data.answer
+        : 'Сейчас не получилось получить ответ. Попробуйте ещё раз через минуту или перейдите к короткому интервью ниже.';
+      conversationHistory.push({ role: 'user', content: question }, { role: 'assistant', content: answer });
+      conversationHistory = conversationHistory.slice(-8);
+      return agentTextMessage(answer);
+    })
+    .catch(() => agentMessage('Не получилось связаться с сервером. Проверьте подключение и попробуйте снова.'))
+    .finally(() => showAgentComposer());
+}
+
+function startAgent() {
+  chat.innerHTML = '';
+  conversationHistory = [];
+  progressWrap.style.display = 'none';
+  clearInput();
+  agentMessage('<strong>Расскажите, что хотите сделать с землёй.</strong><br>Я не буду гонять вас по анкете: сначала разберу задачу, задам только нужные вопросы и дам один понятный следующий шаг.')
+    .then(() => agentMessage('<span class="agent-base-note">Моя база: 11 сценариев получения земли и ставки выкупа по 83 регионам. Для актуальных публикаций и статуса участка я направлю к официальным источникам — не буду выдавать догадки за проверку.</span>'))
+    .then(showAgentComposer);
 }
 
 // ===== ПОКАЗАТЬ РЕЗУЛЬТАТ =====
@@ -758,6 +842,7 @@ function startRouter() {
   chat.innerHTML = '';
   currentQuestion = 0;
   Object.keys(answers).forEach(k => delete answers[k]);
+  conversationHistory = [];
   progressWrap.style.display = 'none';
   clearInput();
 
@@ -779,6 +864,6 @@ document.getElementById('landing-start').addEventListener('click', () => {
   setTimeout(() => {
     landing.style.display = 'none';
     appRoot.classList.add('visible');
-    startRouter();
+    startAgent();
   }, 300);
 });
