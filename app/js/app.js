@@ -12,6 +12,11 @@ const answers = {};
 // Последние реплики дают агенту контекст, но не хранятся на сервере.
 let conversationHistory = [];
 
+// Карточка дела хранится только в браузере пользователя. Это позволяет вернуться
+// к своему маршруту без регистрации и без передачи персональных данных на сервер.
+const CASE_STORAGE_KEY = 'zemelniy-shturman-case-v1';
+let activeCase = loadCase();
+
 // Иконка агента — компас с ростком (инлайн SVG вместо emoji, чтобы не превращалась
 // в пустой квадрат на устройствах без цветных emoji-шрифтов)
 const AGENT_AVATAR_SVG = `<svg width="17" height="17" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
@@ -294,6 +299,157 @@ function clearInput() {
   inputArea.innerHTML = '';
 }
 
+// ===== КАРТОЧКА ЗЕМЕЛЬНОГО ДЕЛА =====
+
+function emptyCase() {
+  return { goal: '', region: '', currentStep: '', nextDate: '', updatedAt: '' };
+}
+
+function loadCase() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CASE_STORAGE_KEY) || 'null');
+    return saved && typeof saved === 'object' ? { ...emptyCase(), ...saved } : emptyCase();
+  } catch (e) {
+    return emptyCase();
+  }
+}
+
+function saveCase(nextCase) {
+  activeCase = { ...emptyCase(), ...nextCase, updatedAt: new Date().toISOString() };
+  try { localStorage.setItem(CASE_STORAGE_KEY, JSON.stringify(activeCase)); } catch (e) { /* браузер может запретить хранилище */ }
+}
+
+function hasCase() {
+  return Boolean(activeCase.goal || activeCase.region || activeCase.currentStep || activeCase.nextDate);
+}
+
+function caseContext() {
+  if (!hasCase()) return '';
+  return [
+    activeCase.goal && `Цель: ${activeCase.goal}`,
+    activeCase.region && `Регион: ${activeCase.region}`,
+    activeCase.currentStep && `Текущий шаг: ${activeCase.currentStep}`,
+    activeCase.nextDate && `Ближайшая дата пользователя: ${activeCase.nextDate}`
+  ].filter(Boolean).join('\n');
+}
+
+function readableDate(value) {
+  if (!value) return '';
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function renderCaseCard() {
+  return new Promise(resolve => {
+    const el = document.createElement('div');
+    el.className = 'msg-agent';
+    el.innerHTML = `<div class="agent-avatar">${AGENT_AVATAR_SVG}</div><div class="bubble-agent case-bubble"></div>`;
+    const card = document.createElement('section');
+    card.className = 'case-card';
+    const eyebrow = document.createElement('div');
+    eyebrow.className = 'case-kicker';
+    eyebrow.textContent = 'МОЁ ДЕЛО';
+    const heading = document.createElement('h3');
+    heading.textContent = hasCase() ? 'Ваш маршрут сохранён' : 'Здесь будет ваше земельное дело';
+    const text = document.createElement('p');
+    text.textContent = hasCase()
+      ? 'Штурман будет учитывать эти данные в следующем ответе.'
+      : 'Сохраните цель и текущий шаг — при следующем входе не придётся начинать с нуля.';
+    card.append(eyebrow, heading, text);
+
+    if (hasCase()) {
+      const facts = document.createElement('dl');
+      facts.className = 'case-facts';
+      [
+        ['Цель', activeCase.goal],
+        ['Регион', activeCase.region],
+        ['Сейчас', activeCase.currentStep],
+        ['Ближайшая дата', readableDate(activeCase.nextDate)]
+      ].filter(([, value]) => value).forEach(([label, value]) => {
+        const dt = document.createElement('dt'); dt.textContent = label;
+        const dd = document.createElement('dd'); dd.textContent = value;
+        facts.append(dt, dd);
+      });
+      card.appendChild(facts);
+    }
+
+    const edit = document.createElement('button');
+    edit.className = 'case-edit-btn';
+    edit.textContent = hasCase() ? 'Обновить дело' : 'Создать дело';
+    edit.addEventListener('click', openCaseEditor);
+    card.appendChild(edit);
+    el.querySelector('.case-bubble').appendChild(card);
+    chat.appendChild(el);
+    scrollBottom();
+    resolve();
+  });
+}
+
+function openCaseEditor() {
+  inputArea.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'case-form';
+  const title = document.createElement('div');
+  title.className = 'case-form-title';
+  title.textContent = 'Карточка земельного дела';
+  const hint = document.createElement('p');
+  hint.textContent = 'Заполните только то, что уже знаете. Эти данные останутся в этом браузере.';
+  form.append(title, hint);
+
+  const fields = [
+    ['goal', 'Ваша цель', 'Например: участок под ИЖС'],
+    ['region', 'Регион или город', 'Например: Тверская область'],
+    ['currentStep', 'На каком шаге вы сейчас', 'Например: ищу участок на НСПД'],
+    ['nextDate', 'Ближайшая важная дата', '', 'date']
+  ];
+  const inputs = {};
+  fields.forEach(([key, label, placeholder, type = 'text']) => {
+    const wrap = document.createElement('label');
+    wrap.className = 'case-field';
+    wrap.textContent = label;
+    const input = document.createElement('input');
+    input.type = type;
+    input.value = activeCase[key] || '';
+    input.placeholder = placeholder;
+    input.maxLength = 180;
+    wrap.appendChild(input);
+    form.appendChild(wrap);
+    inputs[key] = input;
+  });
+
+  const actions = document.createElement('div');
+  actions.className = 'case-form-actions';
+  const save = document.createElement('button');
+  save.type = 'submit'; save.className = 'send-btn'; save.textContent = 'Сохранить';
+  const cancel = document.createElement('button');
+  cancel.type = 'button'; cancel.className = 'case-cancel-btn'; cancel.textContent = 'Отмена';
+  actions.append(save, cancel);
+  form.appendChild(actions);
+
+  if (hasCase()) {
+    const clear = document.createElement('button');
+    clear.type = 'button'; clear.className = 'case-clear-btn'; clear.textContent = 'Удалить это дело с устройства';
+    clear.addEventListener('click', () => {
+      activeCase = emptyCase();
+      try { localStorage.removeItem(CASE_STORAGE_KEY); } catch (e) { /* see saveCase */ }
+      clearInput();
+      agentTextMessage('Карточка дела удалена с этого устройства.').then(showAgentComposer);
+    });
+    form.appendChild(clear);
+  }
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    saveCase(Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])));
+    clearInput();
+    agentTextMessage('Сохранила. В следующем вопросе я учту вашу цель и текущий шаг.')
+      .then(renderCaseCard)
+      .then(showAgentComposer);
+  });
+  cancel.addEventListener('click', showAgentComposer);
+  inputArea.appendChild(form);
+  inputs.goal.focus();
+}
+
 // ===== ДИАЛОГОВЫЙ АГЕНТ =====
 
 function showAgentComposer() {
@@ -303,12 +459,13 @@ function showAgentComposer() {
   [
     ['Найти путь получения', 'Хочу получить участок от государства. Помоги выбрать самый реалистичный путь и начни с ближайшего шага.'],
     ['Проверить участок', 'Хочу проверить участок перед заявлением или торгами. Дай мне порядок проверки по официальным источникам.'],
-    ['Разобрать отказ или документ', 'Мне пришёл отказ или есть документ по земле. Подскажи, какие сведения из него важны и что делать дальше.']
+    ['Разобрать отказ или документ', 'Мне пришёл отказ или есть документ по земле. Подскажи, какие сведения из него важны и что делать дальше.'],
+    ['Моё дело', null]
   ].forEach(([label, prompt]) => {
     const button = document.createElement('button');
     button.className = 'agent-quick-btn';
     button.textContent = label;
-    button.addEventListener('click', () => sendAgentQuestion(prompt, label));
+    button.addEventListener('click', () => prompt ? sendAgentQuestion(prompt, label) : openCaseEditor());
     quick.appendChild(button);
   });
 
@@ -351,7 +508,7 @@ function sendAgentQuestion(question, displayText = question, button = null) {
   fetch('/api/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, history: conversationHistory })
+    body: JSON.stringify({ question, history: conversationHistory, caseContext: caseContext() })
   })
     .then(r => r.json().then(data => ({ ok: r.ok, data })))
     .then(({ ok, data }) => {
@@ -373,6 +530,7 @@ function startAgent() {
   clearInput();
   agentMessage('<strong>Расскажите, что хотите сделать с землёй.</strong><br>Я не буду гонять вас по анкете: сначала разберу задачу, задам только нужные вопросы и дам один понятный следующий шаг.')
     .then(() => agentMessage('<span class="agent-base-note">Моя база: 11 сценариев получения земли и ставки выкупа по 83 регионам. Для актуальных публикаций и статуса участка я направлю к официальным источникам — не буду выдавать догадки за проверку.</span>'))
+    .then(() => hasCase() ? renderCaseCard() : Promise.resolve())
     .then(showAgentComposer);
 }
 
