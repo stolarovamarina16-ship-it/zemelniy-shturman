@@ -4,6 +4,7 @@
 
 const https = require('https');
 const STRATEGIES = require('../js/strategies.js');
+const { REGIONS } = require('../js/region-data.js');
 
 const MODEL = 'anthropic/claude-haiku-4.5';
 const MAX_REQUESTS_PER_HOUR = 12;
@@ -13,6 +14,26 @@ const KNOWLEDGE_BASE = Object.values(STRATEGIES).map(s =>
   `Стратегия ${s.id}: ${s.title}\nОписание: ${s.desc}\nПодходит для: ${s.suitable.join(', ')}\nШаги: ${s.steps.join('; затем ')}\nПредупреждение: ${s.warning}`
 ).join('\n\n');
 
+function normalizeText(value) {
+  return String(value || '').toLowerCase().replace(/ё/g, 'е');
+}
+
+function findMentionedRegion(question) {
+  const text = normalizeText(question);
+  return REGIONS.find(region => {
+    const name = normalizeText(region.name)
+      .replace(/республика|область|край|автономный округ|г\.\s*/g, '')
+      .trim();
+    return name.length > 3 && text.includes(name);
+  }) || null;
+}
+
+function regionalContext(question) {
+  const region = findMentionedRegion(question);
+  if (!region) return 'Регион в вопросе не распознан. Не называй ставку выкупа, пока пользователь не назовёт регион.';
+  return `Региональная справка для «${region.name}» (источник базы: июнь 2026, перед действием перепроверить региональный акт):\n- Выкуп сразу в собственность: ${region.buyout}\n- Выкуп после аренды: ${region.lease}`;
+}
+
 const SYSTEM_PROMPT = `Ты — ассистент сервиса «Земельный Штурман», помогаешь людям получить землю от государства (не в юридической консультации, а в справочном формате).
 
 Отвечай только на основе базы знаний ниже — это 11 стратегий получения земли, которые обсуждались на курсе. Если вопрос выходит за рамки темы «получение земли от государства» или ответа нет в базе — честно скажи, что не знаешь, и посоветуй обратиться к юристу или к автору курса, не выдумывай факты (номера законов, сроки, суммы).
@@ -21,23 +42,32 @@ const SYSTEM_PROMPT = `Ты — ассистент сервиса «Земель
 
 Каждый ответ строй в понятной последовательности:
 Короткий вывод: одна фраза.
-Действия:
-1. Откройте конкретный официальный сервис или обратитесь в конкретный орган.
-2. Найдите нужный раздел, участок или услугу.
-3. Подготовьте и подайте нужный документ.
-4. Проверьте результат и переходите к следующему шагу.
+Что сделать сейчас: один самый ближайший конкретный шаг.
+Дальше: 2–4 действия в порядке очереди.
+Что проверить: риски, документы или данные, без которых нельзя двигаться.
+Если действительно не хватает важной детали — один короткий уточняющий вопрос в конце.
 
-Не придумывай названия кнопок, сроки, суммы или законы. Если точный путь зависит от региона, прямо скажи, что именно нужно уточнить в администрации. Термины объясняй в скобках при первом упоминании.
+Не придумывай названия кнопок, сроки, суммы или законы. Не утверждай, что участок свободен, торги опубликованы, а данные Росреестра актуальны: у тебя нет прямого доступа к реестрам в реальном времени. В таких случаях дай путь проверки через НСПД, ГИС Торги, Росреестр или администрацию. Если точный путь зависит от региона, прямо скажи, что именно нужно уточнить в администрации. Термины объясняй в скобках при первом упоминании.
 
 БАЗА ЗНАНИЙ (11 стратегий):
 ${KNOWLEDGE_BASE}`;
 
-function callPolza(question) {
+function sanitizeHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history.slice(-8).map(item => ({
+    role: item?.role === 'assistant' ? 'assistant' : 'user',
+    content: String(item?.content || '').slice(0, 1200)
+  })).filter(item => item.content.trim());
+}
+
+function callPolza(question, history) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({
       model: MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
+        ...sanitizeHistory(history),
+        { role: 'system', content: regionalContext(question) },
         { role: 'user', content: question }
       ],
       max_tokens: 700
@@ -106,6 +136,7 @@ module.exports = async function handler(req, res) {
   }
 
   const question = String(req.body?.question || '').trim();
+  const history = req.body?.history;
 
   if (!question) {
     res.status(400).json({ error: 'empty_question' });
@@ -128,7 +159,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const data = await callPolza(question);
+    const data = await callPolza(question, history);
     const answer = data?.choices?.[0]?.message?.content;
 
     if (!answer) {
