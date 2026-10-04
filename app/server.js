@@ -7,13 +7,15 @@ const express = require('express');
 const path = require('path');
 const cadastreHandler = require('./api/cadastre.js');
 const askHandler = require('./api/ask.js');
+const analyzeDocumentHandler = require('./api/analyze-document.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/api/cadastre', cadastreHandler);
-app.use(express.json());
+app.use(express.json({ limit: '7mb' }));
 app.post('/api/ask', askHandler);
+app.post('/api/analyze-document', analyzeDocumentHandler);
 app.use(express.static(__dirname));
 
 app.listen(PORT, () => {
