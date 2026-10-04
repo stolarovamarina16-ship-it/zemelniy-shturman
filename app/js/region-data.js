@@ -109,3 +109,7 @@ function parseRatePercent(rateStr) {
   if (!m) return null;
   return parseFloat(m[1].replace(',', '.'));
 }
+
+// Серверный помощник использует ту же таблицу, что и калькулятор в браузере.
+// Так данные не расходятся между двумя частями Штурмана.
+if (typeof module !== 'undefined') module.exports = { REGIONS, findRegion, parseRatePercent };
