@@ -16,6 +16,8 @@ let conversationHistory = [];
 // к своему маршруту без регистрации и без передачи персональных данных на сервер.
 const CASE_STORAGE_KEY = 'zemelniy-shturman-case-v1';
 let activeCase = loadCase();
+const REMINDERS_STORAGE_KEY = 'zemelniy-shturman-reminders-v1';
+let reminders = loadReminders();
 
 // Иконка агента — компас с ростком (инлайн SVG вместо emoji, чтобы не превращалась
 // в пустой квадрат на устройствах без цветных emoji-шрифтов)
@@ -299,6 +301,184 @@ function clearInput() {
   inputArea.innerHTML = '';
 }
 
+function downloadText(filename, content) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  URL.revokeObjectURL(link.href);
+  link.remove();
+}
+
+// ===== НАПОМИНАНИЯ =====
+
+function loadReminders() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(REMINDERS_STORAGE_KEY) || '[]');
+    return Array.isArray(saved) ? saved.filter(item => item && item.text && item.at) : [];
+  } catch (e) { return []; }
+}
+
+function saveReminders() {
+  try { localStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(reminders)); } catch (e) { /* хранилище может быть отключено */ }
+}
+
+function notifyDueReminders(showInChat = false) {
+  const now = Date.now();
+  const due = reminders.filter(item => !item.done && !item.notified && new Date(item.at).getTime() <= now);
+  if (!due.length) return;
+  due.forEach(item => { item.notified = true; });
+  saveReminders();
+  if (showInChat) agentTextMessage(`Напоминание: ${due.map(item => item.text).join('; ')}`);
+  if ('Notification' in window && Notification.permission === 'granted') {
+    due.forEach(item => new Notification('Земельный Штурман', { body: item.text }));
+  }
+}
+
+function openReminderManager() {
+  inputArea.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'tool-form';
+  form.innerHTML = '<div class="tool-form-kicker">СРОКИ</div><h3>Поставить напоминание</h3><p>Напоминание сохранится на этом устройстве. Когда сайт открыт, Штурман покажет его; можно включить уведомления браузера.</p>';
+  const text = document.createElement('input'); text.className = 'text-input'; text.placeholder = 'Например: проверить ответ администрации'; text.maxLength = 160;
+  const at = document.createElement('input'); at.className = 'tool-date-input'; at.type = 'datetime-local';
+  const notifications = document.createElement('label'); notifications.className = 'tool-check';
+  const consent = document.createElement('input'); consent.type = 'checkbox';
+  notifications.append(consent, document.createTextNode('Разрешить уведомления браузера на этом устройстве'));
+  const actions = document.createElement('div'); actions.className = 'tool-actions';
+  const save = document.createElement('button'); save.type = 'submit'; save.className = 'send-btn'; save.textContent = 'Сохранить';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'case-cancel-btn'; cancel.textContent = 'Отмена';
+  actions.append(save, cancel); form.append(text, at, notifications, actions);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (!text.value.trim() || !at.value) return;
+    reminders.push({ id: `${Date.now()}`, text: text.value.trim(), at: new Date(at.value).toISOString(), done: false, notified: false });
+    saveReminders();
+    if (consent.checked && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+    clearInput(); agentTextMessage('Напоминание сохранено на этом устройстве.').then(showAgentComposer);
+  });
+  cancel.addEventListener('click', showAgentComposer);
+  inputArea.appendChild(form); text.focus();
+}
+
+// ===== РАЗБОР ДОКУМЕНТОВ =====
+
+function openDocumentAnalyzer() {
+  inputArea.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'tool-form';
+  form.innerHTML = '<div class="tool-form-kicker">ДОКУМЕНТЫ</div><h3>Разобрать PDF или DOCX</h3><p>Файл не сохраняется в Штурмане: из него извлекается текст для одного анализа. Не загружайте паспорт, банковские данные и другие лишние персональные данные.</p>';
+  const file = document.createElement('input'); file.type = 'file'; file.accept = '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'; file.className = 'tool-file-input';
+  const task = document.createElement('select'); task.className = 'tool-select';
+  [['refusal', 'Отказ администрации'], ['pzz', 'ПЗЗ или градостроительный документ'], ['other', 'Другой земельный документ']].forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; task.appendChild(option); });
+  const question = document.createElement('textarea'); question.className = 'text-input tool-textarea'; question.placeholder = 'Что именно проверить? Можно оставить пустым.'; question.rows = 2;
+  const consentLabel = document.createElement('label'); consentLabel.className = 'tool-check';
+  const consent = document.createElement('input'); consent.type = 'checkbox'; consentLabel.append(consent, document.createTextNode('Я понимаю, что текст файла будет отправлен AI-провайдеру для анализа'));
+  const actions = document.createElement('div'); actions.className = 'tool-actions';
+  const analyze = document.createElement('button'); analyze.type = 'submit'; analyze.className = 'send-btn'; analyze.textContent = 'Разобрать';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'case-cancel-btn'; cancel.textContent = 'Отмена';
+  actions.append(analyze, cancel); form.append(file, task, question, consentLabel, actions);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const selected = file.files?.[0];
+    if (!selected || !consent.checked) return;
+    if (selected.size > 4 * 1024 * 1024) { agentTextMessage('Для первого разбора подходит файл до 4 МБ. Если документ больше, загрузите нужные страницы отдельным PDF.').then(showAgentComposer); return; }
+    analyze.disabled = true; analyze.textContent = 'Читаю…';
+    const reader = new FileReader();
+    reader.onload = () => {
+      const contentBase64 = String(reader.result || '').split(',')[1] || '';
+      fetch('/api/analyze-document', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: selected.name, mimeType: selected.type, contentBase64, task: task.value, question: question.value.trim() }) })
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+          clearInput();
+          if (ok) return agentTextMessage(data.answer);
+          const errors = { text_not_found: 'В файле не нашёлся текстовый слой. Это может быть скан: нужен PDF с распознанным текстом или текстовая версия.', file_too_large: 'Файл больше допустимого размера.', rate_limit_exceeded: 'Лимит разборов на этот час исчерпан. Попробуйте позже.' };
+          return agentTextMessage(errors[data.error] || 'Не удалось разобрать этот файл. Попробуйте другой PDF/DOCX или вставьте текст в чат.');
+        })
+        .catch(() => agentTextMessage('Не получилось отправить документ на разбор. Проверьте интернет и попробуйте ещё раз.'))
+        .finally(showAgentComposer);
+    };
+    reader.readAsDataURL(selected);
+  });
+  cancel.addEventListener('click', showAgentComposer);
+  inputArea.appendChild(form);
+}
+
+// ===== ГЕНЕРАТОР ЗАЯВЛЕНИЙ =====
+
+function openApplicationGenerator() {
+  inputArea.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'tool-form';
+  form.innerHTML = '<div class="tool-form-kicker">ЗАЯВЛЕНИЯ</div><h3>Подготовить черновик заявления</h3><p>Текст формируется из учебных шаблонов. Перед подачей проверьте адресата, основание и требования вашей администрации.</p>';
+  const type = document.createElement('select'); type.className = 'tool-select';
+  [['formed', 'Сформированный участок'], ['unformed', 'Несформированный участок'], ['srzu', 'Утверждение СРЗУ']].forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; type.appendChild(option); });
+  const fields = {};
+  [['authority', 'Кому: администрация', 'Например: Главе администрации …'], ['name', 'ФИО заявителя', 'Полностью'], ['address', 'Адрес заявителя', 'Город, улица, дом'], ['email', 'Email', 'Для ответа'], ['phone', 'Телефон', ''], ['place', 'Местоположение участка', 'Адрес или описание'], ['area', 'Площадь, кв. м', ''], ['cadastre', 'Кадастровый номер', 'Если есть'], ['purpose', 'Цель / ВРИ', 'Например: индивидуальное жилищное строительство'], ['basis', 'Основание', 'Например: статья 39.17 Земельного кодекса РФ']].forEach(([key, label, placeholder]) => {
+    const wrap = document.createElement('label'); wrap.className = 'case-field'; wrap.textContent = label;
+    const input = document.createElement('input'); input.className = 'tool-input'; input.placeholder = placeholder; input.maxLength = 240; input.value = key === 'name' ? '' : (key === 'place' ? '' : '');
+    wrap.appendChild(input); form.appendChild(wrap); fields[key] = input;
+  });
+  form.insertBefore(type, form.children[3]);
+  const actions = document.createElement('div'); actions.className = 'tool-actions';
+  const make = document.createElement('button'); make.type = 'submit'; make.className = 'send-btn'; make.textContent = 'Создать черновик';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'case-cancel-btn'; cancel.textContent = 'Отмена';
+  actions.append(make, cancel); form.appendChild(actions);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const data = Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input.value.trim()]));
+    if (!data.authority || !data.name || !data.address || !data.place || !data.purpose) return;
+    const today = new Date().toLocaleDateString('ru-RU');
+    const subject = type.value === 'formed'
+      ? 'Заявление о предоставлении сформированного земельного участка'
+      : type.value === 'unformed'
+        ? 'Заявление о предварительном согласовании предоставления земельного участка'
+        : 'Заявление об утверждении схемы расположения земельного участка на кадастровом плане территории';
+    const request = type.value === 'formed'
+      ? `Прошу предоставить земельный участок, находящийся в муниципальной собственности либо государственная собственность на который не разграничена, расположенный: ${data.place}, площадью ${data.area || '___'} кв. м${data.cadastre ? `, с кадастровым номером ${data.cadastre}` : ''}, для цели: ${data.purpose}. Основание: ${data.basis || 'уточнить перед подачей'}.`
+      : type.value === 'unformed'
+        ? `Прошу предварительно согласовать предоставление земельного участка, расположенного: ${data.place}, ориентировочной площадью ${data.area || '___'} кв. м, для цели: ${data.purpose}. Основание: ${data.basis || 'уточнить перед подачей'}. Также даю согласие на утверждение иного варианта схемы расположения земельного участка.`
+        : `Прошу утвердить схему расположения земельного участка на кадастровом плане территории: местоположение — ${data.place}; ориентировочная площадь — ${data.area || '___'} кв. м; цель — ${data.purpose}. Основание: ${data.basis || 'уточнить перед подачей'}.`;
+    const result = `${data.authority}\n\nот ${data.name}\nадрес: ${data.address}\nemail: ${data.email || '___'}\nтелефон: ${data.phone || '___'}\n\n${subject}\n\n${request}\n\nПриложения: копия документа, удостоверяющего личность; ${type.value === 'unformed' || type.value === 'srzu' ? 'схема расположения участка на КПТ; ' : ''}${data.cadastre ? 'выписка/сведения об участке (при наличии).' : 'иные документы по требованию администрации.'}\n\nРезультат прошу направить по электронной почте: ${data.email || '___'}.\n\nДата: ${today}\nПодпись: __________________ / ${data.name}`;
+    clearInput();
+    agentTextMessage('Черновик готов. Проверьте все поля перед подачей: особенно адресата, основание и приложения.').then(() => {
+      const box = document.createElement('section'); box.className = 'draft-result';
+      const textarea = document.createElement('textarea'); textarea.value = result; textarea.rows = 15;
+      const row = document.createElement('div'); row.className = 'tool-actions';
+      const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'case-edit-btn'; copy.textContent = 'Скопировать'; copy.onclick = () => navigator.clipboard?.writeText(textarea.value);
+      const download = document.createElement('button'); download.type = 'button'; download.className = 'case-edit-btn'; download.textContent = 'Скачать .txt'; download.onclick = () => downloadText('zayavlenie-zemelniy-shturman.txt', textarea.value);
+      row.append(copy, download); box.append(textarea, row); chat.appendChild(box); scrollBottom(); showAgentComposer();
+    });
+  });
+  cancel.addEventListener('click', showAgentComposer);
+  inputArea.appendChild(form);
+}
+
+// ===== ПРОВЕРКА УЧАСТКА И ТОРГОВ =====
+
+function openLiveCheckDesk() {
+  inputArea.innerHTML = '';
+  const form = document.createElement('form'); form.className = 'tool-form';
+  form.innerHTML = '<div class="tool-form-kicker">ПРОВЕРКА</div><h3>Проверить участок по официальным источникам</h3><p>Штурман проверит кадастровую стоимость, если реестр ответит, и даст прямой маршрут по НСПД, ГИС Торги и Росреестру. Автоматический поиск свободных участков ещё требует отдельного разрешённого источника данных.</p>';
+  const number = document.createElement('input'); number.className = 'text-input'; number.placeholder = 'Кадастровый номер: 50:11:0010101:100';
+  const actions = document.createElement('div'); actions.className = 'tool-actions';
+  const check = document.createElement('button'); check.type = 'submit'; check.className = 'send-btn'; check.textContent = 'Проверить';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'case-cancel-btn'; cancel.textContent = 'Отмена'; actions.append(check, cancel); form.append(number, actions);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const value = number.value.trim();
+    if (!/^\d{2}:\d{2}:\d{6,7}:\d+$/.test(value)) return;
+    check.disabled = true;
+    fetch(`/api/cadastre?number=${encodeURIComponent(value)}`).then(r => r.json().then(data => ({ ok:r.ok, data }))).then(({ ok, data }) => {
+      clearInput();
+      const cost = ok && data.cadCost ? `Кадастровая стоимость: ${formatMoney(data.cadCost)}.` : 'Кадастровую стоимость автоматически получить не удалось — её можно посмотреть на НСПД или в выписке.';
+      return agentTextMessage(`${cost}\n\nДальше откройте НСПД и проверьте границы, ВРИ и ЗОУИТ; затем ГИС Торги — публикации и протоколы; перед решением закажите актуальную выписку ЕГРН. Кадастровый номер: ${value}.`);
+    }).catch(() => agentTextMessage('Не получилось обратиться к реестру. Откройте НСПД вручную и вставьте кадастровый номер.')).finally(showAgentComposer);
+  });
+  cancel.addEventListener('click', showAgentComposer); inputArea.appendChild(form);
+}
+
 // ===== КАРТОЧКА ЗЕМЕЛЬНОГО ДЕЛА =====
 
 function emptyCase() {
@@ -458,14 +638,23 @@ function showAgentComposer() {
   quick.className = 'agent-quick-actions';
   [
     ['Найти путь получения', 'Хочу получить участок от государства. Помоги выбрать самый реалистичный путь и начни с ближайшего шага.'],
-    ['Проверить участок', 'Хочу проверить участок перед заявлением или торгами. Дай мне порядок проверки по официальным источникам.'],
-    ['Разобрать отказ или документ', 'Мне пришёл отказ или есть документ по земле. Подскажи, какие сведения из него важны и что делать дальше.'],
-    ['Моё дело', null]
-  ].forEach(([label, prompt]) => {
+    ['Проверить участок / торги', 'live-check'],
+    ['Разобрать PDF / DOCX', 'document'],
+    ['Создать заявление', 'application'],
+    ['Напомнить мне', 'reminder'],
+    ['Моё дело', 'case']
+  ].forEach(([label, action]) => {
     const button = document.createElement('button');
     button.className = 'agent-quick-btn';
     button.textContent = label;
-    button.addEventListener('click', () => prompt ? sendAgentQuestion(prompt, label) : openCaseEditor());
+    button.addEventListener('click', () => {
+      if (action === 'live-check') return openLiveCheckDesk();
+      if (action === 'document') return openDocumentAnalyzer();
+      if (action === 'application') return openApplicationGenerator();
+      if (action === 'reminder') return openReminderManager();
+      if (action === 'case') return openCaseEditor();
+      return sendAgentQuestion(action, label);
+    });
     quick.appendChild(button);
   });
 
@@ -532,7 +721,10 @@ function startAgent() {
     .then(() => agentMessage('<span class="agent-base-note">Моя база: 37 ключевых учебных материалов, 11 сценариев получения земли и ставки выкупа по 83 регионам. Для актуальных публикаций и статуса участка я направлю к официальным источникам — не буду выдавать догадки за проверку.</span>'))
     .then(() => hasCase() ? renderCaseCard() : Promise.resolve())
     .then(showAgentComposer);
+  notifyDueReminders(true);
 }
+
+setInterval(() => notifyDueReminders(false), 60000);
 
 // ===== ПОКАЗАТЬ РЕЗУЛЬТАТ =====
 
