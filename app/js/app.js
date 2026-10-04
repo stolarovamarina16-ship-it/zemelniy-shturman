@@ -311,6 +311,27 @@ function downloadText(filename, content) {
   link.remove();
 }
 
+// Черновик можно открыть в Word и отредактировать перед подачей. Это не
+// электронная подпись и не официальный заполненный бланк администрации.
+function downloadWordDraft(filename, title, content) {
+  const escaped = String(content)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:Times New Roman,serif;font-size:12pt;line-height:1.45;max-width:180mm;margin:20mm auto"><h2 style="font-size:14pt;text-align:center">${title}</h2><p>${escaped}</p><hr><p style="font-size:9pt;color:#555">Черновик сформирован «Земельным Штурманом». Перед подачей сверить с бланком и регламентом администрации.</p></body></html>`;
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob(['\ufeff', html], { type: 'application/msword;charset=utf-8' }));
+  link.download = filename;
+  document.body.appendChild(link); link.click();
+  URL.revokeObjectURL(link.href); link.remove();
+}
+
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'https:' ? url.href : '';
+  } catch (e) { return ''; }
+}
+
 // ===== НАПОМИНАНИЯ =====
 
 function loadReminders() {
@@ -371,7 +392,7 @@ function openDocumentAnalyzer() {
   form.innerHTML = '<div class="tool-form-kicker">ДОКУМЕНТЫ</div><h3>Разобрать PDF или DOCX</h3><p>Файл не сохраняется в Штурмане: из него извлекается текст для одного анализа. Не загружайте паспорт, банковские данные и другие лишние персональные данные.</p>';
   const file = document.createElement('input'); file.type = 'file'; file.accept = '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'; file.className = 'tool-file-input';
   const task = document.createElement('select'); task.className = 'tool-select';
-  [['refusal', 'Отказ администрации'], ['pzz', 'ПЗЗ или градостроительный документ'], ['other', 'Другой земельный документ']].forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; task.appendChild(option); });
+  [['refusal', 'Отказ администрации'], ['pzz', 'ПЗЗ или градостроительный документ'], ['municipal', 'Регламент, бланк или требования администрации'], ['other', 'Другой земельный документ']].forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; task.appendChild(option); });
   const question = document.createElement('textarea'); question.className = 'text-input tool-textarea'; question.placeholder = 'Что именно проверить? Можно оставить пустым.'; question.rows = 2;
   const consentLabel = document.createElement('label'); consentLabel.className = 'tool-check';
   const consent = document.createElement('input'); consent.type = 'checkbox'; consentLabel.append(consent, document.createTextNode('Я понимаю, что текст файла будет отправлен AI-провайдеру для анализа'));
@@ -411,13 +432,15 @@ function openApplicationGenerator() {
   inputArea.innerHTML = '';
   const form = document.createElement('form');
   form.className = 'tool-form';
-  form.innerHTML = '<div class="tool-form-kicker">ЗАЯВЛЕНИЯ</div><h3>Подготовить черновик заявления</h3><p>Текст формируется из учебных шаблонов. Перед подачей проверьте адресата, основание и требования вашей администрации.</p>';
+  form.innerHTML = '<div class="tool-form-kicker">ЗАЯВЛЕНИЯ</div><h3>Подготовить черновик заявления</h3><p>Заполните только данные для заявления — паспорт, СНИЛС и банковские данные не нужны. Это редактируемый черновик: перед подачей его нужно сверить с регламентом и бланком администрации.</p>';
   const type = document.createElement('select'); type.className = 'tool-select';
   [['formed', 'Сформированный участок'], ['unformed', 'Несформированный участок'], ['srzu', 'Утверждение СРЗУ']].forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; type.appendChild(option); });
   const fields = {};
-  [['authority', 'Кому: администрация', 'Например: Главе администрации …'], ['name', 'ФИО заявителя', 'Полностью'], ['address', 'Адрес заявителя', 'Город, улица, дом'], ['email', 'Email', 'Для ответа'], ['phone', 'Телефон', ''], ['place', 'Местоположение участка', 'Адрес или описание'], ['area', 'Площадь, кв. м', ''], ['cadastre', 'Кадастровый номер', 'Если есть'], ['purpose', 'Цель / ВРИ', 'Например: индивидуальное жилищное строительство'], ['basis', 'Основание', 'Например: статья 39.17 Земельного кодекса РФ']].forEach(([key, label, placeholder]) => {
+  const savedProfile = (() => { try { return JSON.parse(localStorage.getItem('zemelniy-shturman-profile-v1') || '{}'); } catch (e) { return {}; } })();
+  [['authority', 'Кому: администрация', 'Например: Комитет по имуществу администрации …'], ['name', 'ФИО заявителя', 'Полностью'], ['address', 'Адрес заявителя', 'Город, улица, дом'], ['email', 'Email', 'Для ответа'], ['phone', 'Телефон', ''], ['place', 'Местоположение участка', 'Адрес или описание'], ['area', 'Площадь, кв. м', ''], ['cadastre', 'Кадастровый номер', 'Если есть'], ['purpose', 'Цель / ВРИ', 'Например: индивидуальное жилищное строительство'], ['basis', 'Основание', 'Укажите только после проверки регламента']].forEach(([key, label, placeholder]) => {
     const wrap = document.createElement('label'); wrap.className = 'case-field'; wrap.textContent = label;
-    const input = document.createElement('input'); input.className = 'tool-input'; input.placeholder = placeholder; input.maxLength = 240; input.value = key === 'name' ? '' : (key === 'place' ? '' : '');
+    const input = document.createElement('input'); input.className = 'tool-input'; input.placeholder = placeholder; input.maxLength = 240;
+    input.value = savedProfile[key] || (key === 'place' ? (activeCase.goal || '') : (key === 'purpose' ? (activeCase.goal || '') : ''));
     wrap.appendChild(input); form.appendChild(wrap); fields[key] = input;
   });
   form.insertBefore(type, form.children[3]);
@@ -429,6 +452,7 @@ function openApplicationGenerator() {
     event.preventDefault();
     const data = Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input.value.trim()]));
     if (!data.authority || !data.name || !data.address || !data.place || !data.purpose) return;
+    try { localStorage.setItem('zemelniy-shturman-profile-v1', JSON.stringify({ name: data.name, address: data.address, email: data.email, phone: data.phone })); } catch (e) { /* локальное сохранение может быть отключено */ }
     const today = new Date().toLocaleDateString('ru-RU');
     const subject = type.value === 'formed'
       ? 'Заявление о предоставлении сформированного земельного участка'
@@ -447,8 +471,9 @@ function openApplicationGenerator() {
       const textarea = document.createElement('textarea'); textarea.value = result; textarea.rows = 15;
       const row = document.createElement('div'); row.className = 'tool-actions';
       const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'case-edit-btn'; copy.textContent = 'Скопировать'; copy.onclick = () => navigator.clipboard?.writeText(textarea.value);
-      const download = document.createElement('button'); download.type = 'button'; download.className = 'case-edit-btn'; download.textContent = 'Скачать .txt'; download.onclick = () => downloadText('zayavlenie-zemelniy-shturman.txt', textarea.value);
-      row.append(copy, download); box.append(textarea, row); chat.appendChild(box); scrollBottom(); showAgentComposer();
+      const download = document.createElement('button'); download.type = 'button'; download.className = 'case-edit-btn'; download.textContent = 'Скачать .doc'; download.onclick = () => downloadWordDraft('chernovik-zayavleniya-zemelniy-shturman.doc', subject, textarea.value);
+      const downloadTextButton = document.createElement('button'); downloadTextButton.type = 'button'; downloadTextButton.className = 'case-edit-btn'; downloadTextButton.textContent = 'Скачать .txt'; downloadTextButton.onclick = () => downloadText('zayavlenie-zemelniy-shturman.txt', textarea.value);
+      row.append(copy, download, downloadTextButton); box.append(textarea, row); chat.appendChild(box); scrollBottom(); showAgentComposer();
     });
   });
   cancel.addEventListener('click', showAgentComposer);
@@ -477,6 +502,44 @@ function openLiveCheckDesk() {
     }).catch(() => agentTextMessage('Не получилось обратиться к реестру. Откройте НСПД вручную и вставьте кадастровый номер.')).finally(showAgentComposer);
   });
   cancel.addEventListener('click', showAgentComposer); inputArea.appendChild(form);
+}
+
+// Не угадываем адрес администрации: у одного района может быть несколько
+// ведомств. Пользователь указывает муниципалитет, а Штурман даёт точную
+// последовательность поиска официального регламента и проверки бланка.
+function openMunicipalityDesk() {
+  inputArea.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'tool-form municipality-form';
+  form.innerHTML = '<div class="tool-form-kicker">ПОДАЧА В АДМИНИСТРАЦИЮ</div><h3>Собрать требования до подачи</h3><p>Я не буду угадывать адрес органа: неверный адресат — частая причина задержки. Укажите муниципалитет или вставьте найденную официальную ссылку — я дам понятный чек-лист именно для этого шага.</p>';
+  const municipality = document.createElement('input'); municipality.className = 'tool-input'; municipality.placeholder = 'Муниципальный район / городской округ / поселение'; municipality.maxLength = 180;
+  const officialUrl = document.createElement('input'); officialUrl.className = 'tool-input'; officialUrl.type = 'url'; officialUrl.placeholder = 'Официальный сайт администрации (если уже нашли)'; officialUrl.maxLength = 500;
+  const check = document.createElement('label'); check.className = 'tool-check';
+  const checked = document.createElement('input'); checked.type = 'checkbox';
+  check.append(checked, document.createTextNode('Я нашёл(ла) раздел «Муниципальные услуги» / «Земля и имущество» или «Документы»'));
+  const actions = document.createElement('div'); actions.className = 'tool-actions';
+  const continueButton = document.createElement('button'); continueButton.type = 'submit'; continueButton.className = 'send-btn'; continueButton.textContent = 'Показать план подачи';
+  const templateButton = document.createElement('button'); templateButton.type = 'button'; templateButton.className = 'case-edit-btn'; templateButton.textContent = 'Загрузить регламент или бланк';
+  const draftButton = document.createElement('button'); draftButton.type = 'button'; draftButton.className = 'case-edit-btn'; draftButton.textContent = 'Заполнить черновик';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'case-cancel-btn'; cancel.textContent = 'Отмена';
+  actions.append(continueButton, templateButton, draftButton, cancel); form.append(municipality, officialUrl, check, actions);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const place = municipality.value.trim();
+    const siteUrl = safeExternalUrl(officialUrl.value);
+    if (!place && !siteUrl) { municipality.focus(); return; }
+    const source = siteUrl ? `Ссылка, которую вы указали: <a href="${siteUrl}" target="_blank" rel="noopener noreferrer">открыть сайт администрации</a>.` : 'Сначала найдите официальный сайт по запросу «администрация ' + place.replace(/</g, '&lt;') + ' официальный сайт» и проверьте, что в шапке сайта указан орган местного самоуправления.';
+    clearInput();
+    agentMessage(`<strong>План подачи для: ${place ? place.replace(/</g, '&lt;') : 'указанного органа'}.</strong><br>${source}`).then(() => {
+      const card = document.createElement('section'); card.className = 'municipality-plan';
+      card.innerHTML = `<h3>Что найти на сайте администрации</h3><ol><li><strong>Административный регламент</strong> услуги: «предварительное согласование», «утверждение схемы» или «предоставление участка».</li><li><strong>Бланк заявления</strong> и перечень приложений. Если бланка нет, используйте черновик Штурмана только как основу.</li><li><strong>Ответственный орган</strong>: комитет/отдел имущества и земельных отношений, способ подачи, срок и электронная почта.</li><li><strong>Требования к схеме</strong>: формат PDF/XML, подписи, число экземпляров и допустимая площадь.</li></ol><div class="municipality-risk"><strong>До подачи:</strong> адресат совпадает с регламентом; цель и ВРИ не противоречат ПЗЗ; контур не пересекает участки/ЗОУИТ; приложены только документы из перечня.</div><div class="service-link-row"><a href="https://www.gosuslugi.ru/600241/1/form" target="_blank" rel="noopener noreferrer">Проверить услугу на Госуслугах</a><a href="https://nspd.gov.ru" target="_blank" rel="noopener noreferrer">Открыть НСПД</a></div><p class="municipality-note">Госуслуги могут предлагать подачу не во всех регионах и не для каждого случая. Регламент конкретной администрации имеет приоритет по формату и приложениям.</p>`;
+      chat.appendChild(card); scrollBottom(); showAgentComposer();
+    });
+  });
+  templateButton.addEventListener('click', () => { openDocumentAnalyzer(); setTimeout(() => { const select = inputArea.querySelector('select'); if (select) select.value = 'municipal'; }, 0); });
+  draftButton.addEventListener('click', openApplicationGenerator);
+  cancel.addEventListener('click', showAgentComposer);
+  inputArea.appendChild(form);
 }
 
 // ===== ПОМОЩНИК ПО СХЕМЕ УЧАСТКА И ВНЕШНИМ СЕРВИСАМ =====
@@ -763,11 +826,15 @@ function showRouteActions(strategy) {
   problem.className = 'route-secondary-btn';
   problem.textContent = 'Пришёл отказ или требование';
   problem.addEventListener('click', openDocumentAnalyzer);
+  const administration = document.createElement('button');
+  administration.className = 'route-secondary-btn';
+  administration.textContent = 'Требования администрации';
+  administration.addEventListener('click', openMunicipalityDesk);
   const question = document.createElement('button');
   question.className = 'route-secondary-btn';
   question.textContent = 'Задать вопрос по шагу';
   question.addEventListener('click', showAgentComposer);
-  row.append(problem, question);
+  row.append(problem, administration, question);
   panel.appendChild(row);
 
   inputArea.appendChild(panel);
@@ -808,6 +875,7 @@ function showAgentComposer() {
   const actions = hasCase()
     ? [
       ['Продолжить моё дело', 'continue'],
+      ['Подать в администрацию', 'municipality'],
       ['Нарисовать схему', 'scheme-guide'],
       ['Пришёл отказ / требование', 'document'],
       ['Проверить участок', 'live-check'],
@@ -815,6 +883,7 @@ function showAgentComposer() {
     ]
     : [
       ['Начать путь к участку', 'start-route'],
+      ['Подать в администрацию', 'municipality'],
       ['Нарисовать схему', 'scheme-guide'],
       ['У меня есть отказ', 'document'],
       ['У меня есть кадастровый номер', 'live-check']
@@ -828,6 +897,7 @@ function showAgentComposer() {
       if (action === 'continue') return continueSavedCase();
       if (action === 'scheme-guide') return openSchemeGuide();
       if (action === 'live-check') return openLiveCheckDesk();
+      if (action === 'municipality') return openMunicipalityDesk();
       if (action === 'document') return openDocumentAnalyzer();
       if (action === 'application') return openApplicationGenerator();
       if (action === 'reminder') return openReminderManager();
