@@ -610,7 +610,7 @@ function emptyCase() {
     goal: '', region: '', currentStep: '', nextDate: '', updatedAt: '',
     strategyId: '', routeStep: 0, routeStartedAt: '',
     cadastreNumber: '', plotLocation: '', municipality: '', authorityUrl: '',
-    regulationUrl: '', pzzUrl: '', schemeStatus: ''
+    regulationUrl: '', pzzUrl: '', schemeStatus: '', submissionChecks: {}
   };
 }
 
@@ -716,6 +716,11 @@ function renderCaseCard() {
     passport.textContent = activeCase.cadastreNumber || activeCase.plotLocation ? 'Открыть паспорт участка' : 'Создать паспорт участка';
     passport.addEventListener('click', openPlotPassport);
     card.appendChild(passport);
+    const readiness = document.createElement('button');
+    readiness.className = 'case-edit-btn case-readiness-btn';
+    readiness.textContent = 'Проверить готовность к подаче';
+    readiness.addEventListener('click', openSubmissionReadiness);
+    card.appendChild(readiness);
     el.querySelector('.case-bubble').appendChild(card);
     chat.appendChild(el);
     scrollBottom();
@@ -852,6 +857,88 @@ function openPlotPassport() {
   inputs.cadastreNumber.focus();
 }
 
+function applicantProfile() {
+  try { return JSON.parse(localStorage.getItem('zemelniy-shturman-profile-v1') || '{}'); } catch (e) { return {}; }
+}
+
+// Контрольная точка до отправки документов. Она не заменяет местный регламент,
+// но не даёт пользователю перейти к черновику, пока в деле нет базовых опор.
+function openSubmissionReadiness() {
+  clearInput();
+  agentMessage('<strong>Проверим готовность к подаче.</strong><br>Это короткий стоп-лист перед заявлением: он показывает пробелы, которые чаще всего приводят к возврату документов.').then(() => {
+    const card = document.createElement('section');
+    card.className = 'submission-readiness';
+    const title = document.createElement('h3'); title.textContent = 'Перед подачей в администрацию';
+    const intro = document.createElement('p'); intro.textContent = 'Выберите услугу. Штурман сопоставит её с паспортом участка и покажет только нужные проверки.';
+    const service = document.createElement('select'); service.className = 'tool-select';
+    [
+      ['unformed', 'Предварительное согласование: участок ещё не сформирован'],
+      ['srzu', 'Утверждение схемы расположения участка'],
+      ['formed', 'Предоставление сформированного участка']
+    ].forEach(([value, label]) => { const option = document.createElement('option'); option.value = value; option.textContent = label; service.appendChild(option); });
+    const list = document.createElement('div'); list.className = 'readiness-list';
+    const note = document.createElement('p'); note.className = 'readiness-note';
+    const actions = document.createElement('div'); actions.className = 'tool-actions';
+    const draft = document.createElement('button'); draft.type = 'button'; draft.className = 'send-btn'; draft.textContent = 'Открыть черновик заявления';
+    const regulation = document.createElement('button'); regulation.type = 'button'; regulation.className = 'case-edit-btn'; regulation.textContent = 'Разобрать регламент / бланк';
+    const municipality = document.createElement('button'); municipality.type = 'button'; municipality.className = 'case-edit-btn'; municipality.textContent = 'Открыть требования администрации';
+    const back = document.createElement('button'); back.type = 'button'; back.className = 'case-cancel-btn'; back.textContent = 'Назад';
+    actions.append(draft, regulation, municipality, back);
+    card.append(title, intro, service, list, note, actions);
+    chat.appendChild(card); scrollBottom();
+
+    const render = () => {
+      const type = service.value;
+      const profile = applicantProfile();
+      const manual = activeCase.submissionChecks && typeof activeCase.submissionChecks === 'object' ? activeCase.submissionChecks : {};
+      const isFormed = type === 'formed';
+      const needsScheme = type === 'unformed' || type === 'srzu';
+      const schemeReady = ['Схема сохранена', 'Подано в администрацию'].includes(activeCase.schemeStatus);
+      const items = [
+        { id: 'plot', ready: isFormed ? Boolean(activeCase.cadastreNumber) : Boolean(activeCase.cadastreNumber || activeCase.plotLocation), text: isFormed ? 'Указан кадастровый номер сформированного участка' : 'Указан участок: кадастровый номер или ориентир' },
+        { id: 'municipality', ready: Boolean(activeCase.municipality), text: 'Указан муниципалитет' },
+        { id: 'authority', ready: Boolean(safeExternalUrl(activeCase.authorityUrl)), text: 'Сохранён официальный сайт или уполномоченный орган' },
+        { id: 'regulation', ready: Boolean(safeExternalUrl(activeCase.regulationUrl)), text: 'Сохранена ссылка на регламент или конкретную услугу' },
+        { id: 'pzz', ready: Boolean(safeExternalUrl(activeCase.pzzUrl)), text: 'Сохранена ссылка на ПЗЗ / карту и выполнена проверка ВРИ и ограничений' },
+        { id: 'profile', ready: Boolean(profile.name && profile.address), text: 'В черновике уже сохранены ФИО и адрес заявителя' },
+        ...(needsScheme ? [{ id: 'scheme', ready: schemeReady, text: 'Схема подготовлена и сохранена для подачи' }] : []),
+        { id: 'formReviewed', ready: Boolean(manual.formReviewed), manual: true, text: 'Я сверил(а) поля черновика с муниципальным бланком' },
+        { id: 'attachmentsPrepared', ready: Boolean(manual.attachmentsPrepared), manual: true, text: 'Я собрал(а) приложения строго по перечню регламента' }
+      ];
+      list.innerHTML = '';
+      items.forEach(item => {
+        const row = document.createElement('label'); row.className = `readiness-item${item.ready ? ' is-ready' : ''}`;
+        const mark = document.createElement('span'); mark.className = 'readiness-mark'; mark.textContent = item.ready ? 'Готово' : 'Нужно';
+        const body = document.createElement('span'); body.textContent = item.text;
+        row.append(mark, body);
+        if (item.manual) {
+          const input = document.createElement('input'); input.type = 'checkbox'; input.checked = item.ready;
+          input.setAttribute('aria-label', item.text);
+          input.addEventListener('change', () => {
+            const checks = { ...(activeCase.submissionChecks || {}), [item.id]: input.checked };
+            saveCase({ ...activeCase, submissionChecks: checks }); render();
+          });
+          row.appendChild(input);
+        }
+        list.appendChild(row);
+      });
+      const readyCount = items.filter(item => item.ready).length;
+      const completed = readyCount === items.length;
+      note.textContent = completed
+        ? 'Базовый комплект собран. Можно открыть черновик, ещё раз сверить его с бланком и подать способом из регламента.'
+        : `Готово ${readyCount} из ${items.length}. Сначала закройте пункты «Нужно» — черновик не заменяет эти проверки.`;
+      draft.disabled = !completed;
+      draft.title = completed ? '' : 'Сначала завершите проверки из списка';
+    };
+    service.addEventListener('change', render);
+    draft.addEventListener('click', openApplicationGenerator);
+    regulation.addEventListener('click', () => { openDocumentAnalyzer(); setTimeout(() => { const select = inputArea.querySelector('select'); if (select) select.value = 'municipal'; }, 0); });
+    municipality.addEventListener('click', openMunicipalityDesk);
+    back.addEventListener('click', showAgentComposer);
+    render();
+  });
+}
+
 // ===== ДИАЛОГОВЫЙ АГЕНТ =====
 
 function getActiveStrategy() {
@@ -969,6 +1056,7 @@ function showAgentComposer() {
     ? [
       ['Продолжить моё дело', 'continue'],
       ['Паспорт участка', 'plot-passport'],
+      ['Готовность к подаче', 'submission-readiness'],
       ['Подать в администрацию', 'municipality'],
       ['Нарисовать схему', 'scheme-guide'],
       ['Пришёл отказ / требование', 'document'],
@@ -978,6 +1066,7 @@ function showAgentComposer() {
     : [
       ['Начать путь к участку', 'start-route'],
       ['Паспорт участка', 'plot-passport'],
+      ['Готовность к подаче', 'submission-readiness'],
       ['Подать в администрацию', 'municipality'],
       ['Нарисовать схему', 'scheme-guide'],
       ['У меня есть отказ', 'document'],
@@ -993,6 +1082,7 @@ function showAgentComposer() {
       if (action === 'scheme-guide') return openSchemeGuide();
       if (action === 'live-check') return openLiveCheckDesk();
       if (action === 'plot-passport') return openPlotPassport();
+      if (action === 'submission-readiness') return openSubmissionReadiness();
       if (action === 'municipality') return openMunicipalityDesk();
       if (action === 'document') return openDocumentAnalyzer();
       if (action === 'application') return openApplicationGenerator();
