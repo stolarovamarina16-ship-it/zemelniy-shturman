@@ -53,11 +53,25 @@ function agentMessage(html, delay = 0) {
   });
 }
 
+function agentTextMessage(text, delay = 0) {
+  const safeHtml = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\n/g, '<br>');
+  return agentMessage(safeHtml, delay);
+}
+
 // Добавить сообщение пользователя
 function userMessage(text) {
   const el = document.createElement('div');
   el.className = 'msg-user';
-  el.innerHTML = `<div class="bubble-user">${text}</div>`;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble-user';
+  bubble.textContent = text;
+  el.appendChild(bubble);
   chat.appendChild(el);
   scrollBottom();
 }
@@ -70,7 +84,7 @@ function showOptions(options, onChoose, questionIndex = 0) {
   if (questionIndex > 0) {
     const backBtn = document.createElement('button');
     backBtn.className = 'back-btn';
-    backBtn.innerHTML = '← Назад';
+    backBtn.textContent = 'Назад';
     backBtn.onclick = () => goBack(questionIndex);
     inputArea.appendChild(backBtn);
   }
@@ -144,7 +158,7 @@ function showSearchSelect(q, onChoose, questionIndex = 0) {
   if (questionIndex > 0) {
     const backBtn = document.createElement('button');
     backBtn.className = 'back-btn';
-    backBtn.innerHTML = '← Назад';
+    backBtn.textContent = 'Назад';
     backBtn.onclick = () => goBack(questionIndex);
     inputArea.appendChild(backBtn);
   }
@@ -256,7 +270,7 @@ function goBack(fromIndex) {
   // Маленькая плашка «вернулись назад» в чате
   const el = document.createElement('div');
   el.className = 'msg-back';
-  el.textContent = '↩ вернулись к предыдущему вопросу';
+  el.textContent = 'Вернулись к предыдущему вопросу';
   chat.appendChild(el);
   scrollBottom();
 
@@ -358,7 +372,7 @@ function renderCadastreCalculator(region, form) {
           lookupBtn.disabled = false;
           if (ok && data.cadCost) {
             valueInp.value = String(Math.round(data.cadCost));
-            lookupStatus.textContent = `Найдено: ${formatMoney(data.cadCost)} ✓`;
+            lookupStatus.textContent = `Найдено: ${formatMoney(data.cadCost)}`;
           } else {
             lookupStatus.textContent = 'Не удалось найти автоматически (реестр недоступен) — впишите стоимость вручную ниже';
           }
@@ -411,7 +425,7 @@ const DUE_DILIGENCE_ITEMS = [
 function renderDueDiligenceChecklist() {
   return new Promise((resolve) => {
     const itemsHtml = DUE_DILIGENCE_ITEMS.map((item, i) =>
-      `<div class="step-item"><div class="step-num">${i + 1}</div><div>${item}</div></div>`
+          `<div class="step-item"><div class="step-num">${i + 1}</div><div>${item}</div></div>`
     ).join('');
 
     const el = document.createElement('div');
@@ -420,8 +434,8 @@ function renderDueDiligenceChecklist() {
       <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
       <div class="bubble-agent" style="padding:0; overflow:hidden; border-radius: 4px 16px 16px 16px;">
         <div class="strategy-card">
-          <div class="tag">🔍 Проверьте перед подачей</div>
-          <h3>Что реально валит заявки</h3>
+          <div class="tag">Проверка участка</div>
+          <h3>Проверьте до подачи заявления</h3>
           ${itemsHtml}
         </div>
       </div>`;
@@ -474,7 +488,7 @@ function renderDocumentChecklist() {
     const itemsHtml = DOCUMENT_CHECKLIST_ITEMS.map((item, i) => `
       <div class="step-item">
         <div class="step-num">${i + 1}</div>
-        <div>${item.text}${item.linkUrl ? ` <a href="${item.linkUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--ochre-light);white-space:nowrap;">→ ${item.linkLabel}</a>` : ''}</div>
+        <div>${item.text}${item.linkUrl ? ` <a href="${item.linkUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--ochre-light);white-space:nowrap;">Открыть ${item.linkLabel}</a>` : ''}</div>
       </div>`
     ).join('');
 
@@ -484,7 +498,7 @@ function renderDocumentChecklist() {
       <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
       <div class="bubble-agent" style="padding:0; overflow:hidden; border-radius: 4px 16px 16px 16px;">
         <div class="strategy-card">
-          <div class="tag">📄 Пакет документов</div>
+          <div class="tag">Документы</div>
           <h3>Что понадобится для подачи</h3>
           ${itemsHtml}
         </div>
@@ -495,63 +509,34 @@ function renderDocumentChecklist() {
   });
 }
 
-// Захват e-mail — заглушка. Пока не подключён бэкенд (см. PLAN.md, Этап 7/9),
-// поэтому просто подтверждаем и не отправляем данные никуда. TODO: подключить
-// сохранение (Supabase/таблица) и реальную отправку письма с результатом.
-function renderEmailCapture() {
-  return new Promise((resolve) => {
-    const el = document.createElement('div');
-    el.className = 'msg-agent';
-    el.innerHTML = `
-      <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
-      <div class="bubble-agent" style="padding:0; overflow:hidden; border-radius: 4px 16px 16px 16px;">
-        <div class="strategy-card">
-          <div class="tag">📩 Не потерять результат</div>
-          <h3>Пришлём разбор на почту</h3>
-          <p class="desc">Оставьте e-mail — сохраним вашу стратегию и чек-листы, чтобы не искать их заново.</p>
-        </div>
-      </div>`;
-
-    const cardBody = el.querySelector('.strategy-card');
-
-    const row = document.createElement('div');
-    row.className = 'text-row';
-
-    const input = document.createElement('input');
-    input.className = 'text-input';
-    input.type = 'email';
-    input.placeholder = 'ваш@email.ru';
-
-    const btn = document.createElement('button');
-    btn.className = 'send-btn';
-    btn.textContent = 'Отправить';
-
-    const handleSubmit = () => {
-      const email = input.value.trim();
-      if (!email || !email.includes('@')) {
-        input.classList.add('input-error');
-        return;
-      }
-      input.classList.remove('input-error');
-      row.remove();
-      const thanks = document.createElement('p');
-      thanks.className = 'desc';
-      thanks.style.marginTop = '12px';
-      thanks.textContent = 'Спасибо! Пока это заглушка — рассылку результатов подключим на следующем шаге, письмо на ' + email + ' не уйдёт.';
-      cardBody.appendChild(thanks);
-      scrollBottom();
-    };
-
-    btn.onclick = handleSubmit;
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') handleSubmit(); });
-
-    row.appendChild(input);
-    row.appendChild(btn);
-    cardBody.appendChild(row);
-
-    chat.appendChild(el);
-    scrollBottom();
-    resolve();
+function renderStrategyCards(strategies) {
+  return new Promise(resolve => {
+    strategies.forEach((s, idx) => {
+      setTimeout(() => {
+        const stepsHtml = s.steps.map((step, i) =>
+          `<div class="step-item"><div class="step-num">${i + 1}</div><div>${step}</div></div>`
+        ).join('');
+        const hint = getStrategyHint(s, answers);
+        const card = document.createElement('div');
+        card.className = 'msg-agent';
+        card.innerHTML = `
+          <div class="agent-avatar">${s.id}</div>
+          <div class="bubble-agent" style="padding:0; overflow:hidden; border-radius: 4px 16px 16px 16px;">
+            <div class="strategy-card">
+              <div class="tag">${s.tag}</div>
+              <h3>${s.title}</h3>
+              ${hint ? `<div class="strategy-hint">${hint}</div>` : ''}
+              <p class="desc">${s.desc}</p>
+              <div class="steps-title">Действуйте по порядку</div>
+              ${stepsHtml}
+              ${s.warning ? `<div class="strategy-warning">${s.warning}</div>` : ''}
+            </div>
+          </div>`;
+        chat.appendChild(card);
+        scrollBottom();
+      }, idx * 350);
+    });
+    setTimeout(resolve, strategies.length * 350 + 120);
   });
 }
 
@@ -563,53 +548,20 @@ function showResult(strategies) {
   const regionNote = getRegionRateNote(answers);
   const region = answers.region_ru ? findRegion(answers.region_ru) : null;
 
-  // Сообщение с объяснением
-  agentMessage(`Отлично! Я проанализировал ваши ответы. ${explanation}`).then(() => {
+  agentMessage(`Я подобрал маршрут по вашим ответам. ${explanation}`).then(() => {
     return regionNote ? agentMessage(regionNote) : Promise.resolve();
+  }).then(() => {
+    return renderStrategyCards(strategies);
   }).then(() => {
     return renderDueDiligenceChecklist();
   }).then(() => {
     return renderDocumentChecklist();
   }).then(() => {
-    return renderEmailCapture();
-  }).then(() => {
     return region ? renderCadastreCalculator(region, answers.form) : Promise.resolve();
   }).then(() => {
-
-    strategies.forEach((s, idx) => {
-      setTimeout(() => {
-        const stepsHtml = s.steps.map((step, i) =>
-          `<div class="step-item"><div class="step-num">${i+1}</div><div>${step}</div></div>`
-        ).join('');
-
-        const hint = getStrategyHint(s, answers);
-
-        const card = document.createElement('div');
-        card.className = 'msg-agent';
-        card.innerHTML = `
-          <div class="agent-avatar">${s.emoji}</div>
-          <div class="bubble-agent" style="padding:0; overflow:hidden; border-radius: 4px 16px 16px 16px;">
-            <div class="strategy-card">
-              <div class="tag">${s.tag}</div>
-              <h3>${s.title}</h3>
-              ${hint ? `<div style="margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,.15);border-radius:8px;font-size:13px;line-height:1.5;">${hint}</div>` : ''}
-              <p class="desc">${s.desc}</p>
-              <div class="steps-title">Первые шаги:</div>
-              ${stepsHtml}
-              ${s.warning ? `<div style="margin-top:12px;padding:10px 12px;background:rgba(255,255,255,.12);border-radius:8px;font-size:13px;opacity:.9;">⚠️ ${s.warning}</div>` : ''}
-            </div>
-          </div>`;
-        chat.appendChild(card);
-        scrollBottom();
-      }, idx * 400);
-    });
-
-    // Кнопка "начать сначала" и "задать вопрос"
-    setTimeout(() => {
-      agentMessage('Хотите узнать подробнее о любом шаге? Задайте вопрос — или начните сначала, чтобы выбрать другую стратегию.').then(() => {
-        showFinalActions();
-      });
-    }, strategies.length * 400 + 300);
+    return agentMessage('Нужна помощь с конкретным шагом? Напишите вопрос или начните подбор заново.');
+  }).then(() => {
+    showFinalActions();
   });
 }
 
@@ -621,7 +573,7 @@ function showFinalActions() {
   // Кнопка "начать сначала"
   const restartBtn = document.createElement('button');
   restartBtn.className = 'option-btn';
-  restartBtn.textContent = '🔄 Начать сначала';
+  restartBtn.textContent = 'Начать заново';
   restartBtn.onclick = () => { startRouter(); };
   grid.appendChild(restartBtn);
 
@@ -656,8 +608,8 @@ function showFinalActions() {
       .then(({ ok, data }) => {
         const answer = ok
           ? data.answer
-          : 'Не получилось получить ответ прямо сейчас — попробуйте ещё раз чуть позже или посмотрите стратегии выше 👆';
-        return agentMessage(answer.replace(/\n/g, '<br>'));
+          : 'Не получилось получить ответ прямо сейчас. Попробуйте ещё раз чуть позже или посмотрите предложенный маршрут выше.';
+        return agentTextMessage(answer);
       })
       .catch(() => agentMessage('Не получилось связаться с сервером. Проверьте подключение и попробуйте снова.'))
       .finally(() => { sendBtn.disabled = false; });
@@ -722,8 +674,8 @@ function startRouter() {
   clearInput();
 
   // Приветственное сообщение
-  agentMessage('Привет! Я <strong>Земельный Штурман</strong> — помогу разобраться, как получить землю от государства по вашей ситуации. 🗺️')
-  .then(() => agentMessage('Задам вам 5 коротких вопросов и подберу подходящую стратегию из 11 возможных. Это займёт около 2 минут.'))
+  agentMessage('Привет! Я <strong>Земельный Штурман</strong>. Помогу разобраться, как получить землю от государства в вашей ситуации.')
+  .then(() => agentMessage('Задам несколько коротких вопросов и покажу подходящий порядок действий. Это займёт около двух минут.'))
   .then(() => {
     setTimeout(() => askQuestion(0), 300);
   });
