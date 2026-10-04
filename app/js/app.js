@@ -479,6 +479,67 @@ function openLiveCheckDesk() {
   cancel.addEventListener('click', showAgentComposer); inputArea.appendChild(form);
 }
 
+// ===== ПОМОЩНИК ПО СХЕМЕ УЧАСТКА И ВНЕШНИМ СЕРВИСАМ =====
+
+function openSchemeGuide() {
+  clearInput();
+  agentMessage('<strong>Сначала подготовим место на карте, затем нарисуем черновик схемы.</strong><br>Я покажу, что включить в НСПД. Галочки вы нажимаете сами в официальном сервисе — так мы не подменяем проверку государства.')
+    .then(() => {
+      const el = document.createElement('section');
+      el.className = 'service-guide';
+      el.innerHTML = `
+        <div class="service-guide-kicker">СХЕМА УЧАСТКА</div>
+        <h3>НСПД: обязательная проверка перед рисованием</h3>
+        <p class="service-guide-lead">Откройте сервис «Земля просто» → «Воспользоваться сервисом» → авторизуйтесь → «Нарисовать территорию».</p>
+        <div class="service-link-row">
+          <a href="https://nspd.gov.ru" target="_blank" rel="noopener noreferrer">Открыть НСПД</a>
+          <a href="https://fgistp.economy.gov.ru" target="_blank" rel="noopener noreferrer">Найти ПЗЗ в ФГИС ТП</a>
+        </div>
+        <div class="service-guide-section">
+          <h4>Включите эти слои</h4>
+          <p>Названия в НСПД могут немного меняться — ориентируйтесь на смысл.</p>
+          <label class="layer-check"><input type="checkbox"><span><strong>Кадастровые кварталы</strong><small>Чтобы видеть квартал, в котором создаётся контур.</small></span></label>
+          <label class="layer-check"><input type="checkbox"><span><strong>Участки ЕГРН и образуемые по схеме</strong><small>Чтобы не наложить контур на известный участок или уже созданную схему.</small></span></label>
+          <label class="layer-check"><input type="checkbox"><span><strong>Границы населённых пунктов</strong><small>Чтобы не выйти за территорию, которую проверяете.</small></span></label>
+          <label class="layer-check"><input type="checkbox"><span><strong>Здания и объекты незавершённого строительства</strong><small>Чтобы не выбрать место с видимым объектом.</small></span></label>
+          <label class="layer-check"><input type="checkbox"><span><strong>Территориальные зоны и красные линии</strong><small>Проверка ПЗЗ и территории общего пользования.</small></span></label>
+          <label class="layer-check"><input type="checkbox"><span><strong>ЗОУИТ, природные территории и лесничества</strong><small>Их отсутствие на карте не отменяет отдельную проверку.</small></span></label>
+        </div>
+        <div class="service-guide-section">
+          <h4>Когда рисуете контур</h4>
+          <ol class="service-guide-steps">
+            <li>Включите магнитную привязку к участкам ЕГРН или территориальным зонам.</li>
+            <li>Поставьте точки по границе; для соседнего участка привязывайтесь к его поворотным точкам.</li>
+            <li>Нажмите «Проверить» и исправьте пересечения.</li>
+            <li>Проверьте площадь по местным ПЗЗ, сохраните PDF и XML.</li>
+          </ol>
+        </div>
+        <div class="service-guide-section service-guide-other">
+          <h4>Другие полезные сервисы</h4>
+          <p><strong>АРГО 7</strong> — более профессиональный вариант для точной ручной схемы; нужен, если НСПД не подходит или требуется работать с координатами.</p>
+          <p><strong>ФГИС ТП и региональный геопортал</strong> — искать действующие ПЗЗ, генплан и проект межевания.</p>
+          <p><strong>Яндекс Карты / спутниковые снимки</strong> — осмотреть дорогу, рельеф и фактические постройки; это не подтверждает правовой статус участка.</p>
+          <p><strong>Госуслуги</strong> — подать заявление, только когда маршрут и комплект документов проверены.</p>
+        </div>
+        <p class="service-guide-warning">Проверка в НСПД не означает, что участок точно предоставят. Перед подачей нужно проверить регламент администрации и актуальный статус территории.</p>`;
+      chat.appendChild(el);
+      scrollBottom();
+
+      const panel = document.createElement('div');
+      panel.className = 'service-guide-actions';
+      const next = document.createElement('button');
+      next.className = 'route-primary-btn';
+      next.textContent = 'Я нарисовал(а) контур — что проверить дальше';
+      next.addEventListener('click', () => sendAgentQuestion('Я нарисовал(а) контур участка в НСПД. Помоги составить список проверок перед сохранением схемы и подачей заявления.', 'Проверить нарисованный контур'));
+      const back = document.createElement('button');
+      back.className = 'route-secondary-btn';
+      back.textContent = 'Вернуться к делу';
+      back.addEventListener('click', continueSavedCase);
+      panel.append(next, back);
+      inputArea.appendChild(panel);
+    });
+}
+
 // ===== КАРТОЧКА ЗЕМЕЛЬНОГО ДЕЛА =====
 
 function emptyCase() {
@@ -747,12 +808,14 @@ function showAgentComposer() {
   const actions = hasCase()
     ? [
       ['Продолжить моё дело', 'continue'],
+      ['Нарисовать схему', 'scheme-guide'],
       ['Пришёл отказ / требование', 'document'],
       ['Проверить участок', 'live-check'],
       ['Моё дело', 'case']
     ]
     : [
       ['Начать путь к участку', 'start-route'],
+      ['Нарисовать схему', 'scheme-guide'],
       ['У меня есть отказ', 'document'],
       ['У меня есть кадастровый номер', 'live-check']
     ];
@@ -763,6 +826,7 @@ function showAgentComposer() {
     button.addEventListener('click', () => {
       if (action === 'start-route') return startRouter();
       if (action === 'continue') return continueSavedCase();
+      if (action === 'scheme-guide') return openSchemeGuide();
       if (action === 'live-check') return openLiveCheckDesk();
       if (action === 'document') return openDocumentAnalyzer();
       if (action === 'application') return openApplicationGenerator();
