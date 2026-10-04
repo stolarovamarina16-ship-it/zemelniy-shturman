@@ -267,6 +267,27 @@ body {
 .agent-interview-link { border: 0; background: transparent; color: var(--text-muted); font: 600 12px/1.4 inherit; padding: 10px 2px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .agent-interview-link:hover { color: var(--ochre); }
 
+.case-bubble { width: min(100%, 470px); padding: 0; overflow: hidden; }
+.case-card { padding: 18px; background: linear-gradient(130deg, #fffdf7, #edf4e9); }
+.case-kicker { color: var(--ochre); font-size: 10px; font-weight: 800; letter-spacing: .16em; }
+.case-card h3 { margin: 5px 0 4px; color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 20px; line-height: 1.2; }
+.case-card > p { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.case-facts { display: grid; grid-template-columns: 92px 1fr; gap: 7px 10px; margin: 14px 0; padding-top: 13px; border-top: 1px solid rgba(92,138,90,.28); font-size: 12px; line-height: 1.4; }
+.case-facts dt { color: var(--text-muted); }
+.case-facts dd { color: var(--forest-900); font-weight: 700; margin: 0; }
+.case-edit-btn { margin-top: 13px; border: 1px solid rgba(92,138,90,.45); border-radius: 8px; padding: 8px 11px; background: var(--white); color: var(--forest-900); font: 700 12px inherit; cursor: pointer; }
+.case-edit-btn:hover { background: var(--moss-pale); }
+.case-form { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 15px; background: var(--white); box-shadow: var(--shadow-sm); }
+.case-form-title { color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 19px; font-weight: 600; }
+.case-form > p { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.case-field { display: grid; gap: 5px; color: var(--forest-900); font-size: 12px; font-weight: 800; }
+.case-field input { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--text); font: 400 13px inherit; padding: 10px; outline: none; }
+.case-field input:focus { border-color: var(--moss); box-shadow: 0 0 0 3px rgba(92,138,90,.13); }
+.case-form-actions { display: flex; gap: 8px; align-items: center; }
+.case-cancel-btn, .case-clear-btn { border: 0; background: transparent; color: var(--text-muted); font: 600 12px inherit; cursor: pointer; padding: 7px 4px; }
+.case-cancel-btn:hover, .case-clear-btn:hover { color: var(--ochre); }
+.case-clear-btn { justify-self: start; text-decoration: underline; text-underline-offset: 3px; }
+
 /* Сетка кнопок-вариантов */
 .options-grid {
   display: flex;
