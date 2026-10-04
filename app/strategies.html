@@ -87,7 +87,7 @@
 </head>
 <body>
   <div class="list-page">
-    <a class="back-link" href="index.html">← На главную</a>
+    <a class="back-link" href="index.html">На главную</a>
     <h1>Все 11 стратегий</h1>
     <p class="lead">
       Если не хочется проходить квиз — вот список всех стратегий получения земли от государства.
@@ -107,7 +107,7 @@
       card.className = 'strategy-list-card';
       card.innerHTML = `
         <div class="tag">${s.tag}</div>
-        <h2>${s.emoji} ${s.title}</h2>
+        <h2>${s.title}</h2>
         <p>${s.desc}</p>
         <div class="suitable">Подходит для: ${s.suitable.join(', ')}</div>
       `;
