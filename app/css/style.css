@@ -311,7 +311,7 @@ body {
   transition: color .15s, gap .15s;
 }
 
-.back-btn:hover { color: var(--ochre); gap: 7px; }
+.back-btn:hover { color: var(--ochre); }
 
 /* Плашка «вернулись назад» в чате */
 .msg-back {
@@ -452,6 +452,28 @@ body {
   color: var(--ochre-light);
   opacity: .85;
   margin-bottom: 10px;
+}
+
+.strategy-hint,
+.strategy-warning {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.strategy-hint {
+  margin-top: 0;
+  margin-bottom: 12px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+.strategy-warning {
+  background: rgba(232,163,61,.13);
+  border-left: 2px solid var(--ochre-light);
+  color: var(--paper);
 }
 
 .strategy-card .step-item {
