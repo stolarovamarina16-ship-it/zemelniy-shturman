@@ -60,13 +60,18 @@ function sanitizeHistory(history) {
   })).filter(item => item.content.trim());
 }
 
-function callPolza(question, history) {
+function safeCaseContext(value) {
+  return String(value || '').slice(0, 800).trim();
+}
+
+function callPolza(question, history, caseContext) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({
       model: MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...sanitizeHistory(history),
+        ...(safeCaseContext(caseContext) ? [{ role: 'system', content: `Карточка дела пользователя. Учитывай её как контекст, но не додумывай отсутствующие данные:\n${safeCaseContext(caseContext)}` }] : []),
         { role: 'system', content: regionalContext(question) },
         { role: 'user', content: question }
       ],
@@ -137,6 +142,7 @@ module.exports = async function handler(req, res) {
 
   const question = String(req.body?.question || '').trim();
   const history = req.body?.history;
+  const caseContext = req.body?.caseContext;
 
   if (!question) {
     res.status(400).json({ error: 'empty_question' });
@@ -159,7 +165,7 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const data = await callPolza(question, history);
+    const data = await callPolza(question, history, caseContext);
     const answer = data?.choices?.[0]?.message?.content;
 
     if (!answer) {
