@@ -280,6 +280,26 @@ body {
 .route-guide a { color: var(--forest-700); font-weight: 800; }
 .route-warning { margin-top: 12px; padding: 10px 11px; border-left: 3px solid var(--ochre); border-radius: 4px 8px 8px 4px; background: var(--paper-dim); color: var(--text); font-size: 13px; line-height: 1.45; }
 
+/* Карточка-инструкция для внешних государственных сервисов */
+.service-guide { margin-left: 45px; max-width: calc(92% - 45px); padding: 19px; border: 1px solid rgba(92,138,90,.36); border-radius: 4px var(--radius) var(--radius) var(--radius); background: linear-gradient(145deg, #fffdf7, #eef6ea); box-shadow: var(--shadow-sm); animation: fadeUp .38s var(--ease-out) both; }
+.service-guide-kicker { color: var(--ochre); font-size: 10px; font-weight: 800; letter-spacing: .15em; }
+.service-guide h3 { margin: 5px 0 8px; color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 20px; line-height: 1.2; }
+.service-guide h4 { margin-bottom: 4px; color: var(--forest-900); font-size: 13px; }
+.service-guide-lead, .service-guide-section > p { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.service-link-row { display: flex; flex-wrap: wrap; gap: 7px; margin: 13px 0 16px; }
+.service-link-row a { border: 1px solid rgba(92,138,90,.48); border-radius: 999px; padding: 7px 10px; background: var(--white); color: var(--forest-900); font-size: 12px; font-weight: 800; text-decoration: none; }
+.service-link-row a:hover { background: var(--moss-pale); }
+.service-guide-section { margin-top: 15px; padding-top: 14px; border-top: 1px solid rgba(92,138,90,.26); }
+.layer-check { display: flex; gap: 9px; align-items: flex-start; margin-top: 10px; color: var(--text); cursor: pointer; }
+.layer-check input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--moss); flex-shrink: 0; }
+.layer-check strong { display: block; color: var(--forest-900); font-size: 12px; line-height: 1.35; }
+.layer-check small { display: block; margin-top: 1px; color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+.service-guide-steps { display: grid; gap: 8px; margin: 10px 0 0 18px; color: var(--text); font-size: 12px; line-height: 1.45; }
+.service-guide-other { display: grid; gap: 8px; }
+.service-guide-other p { margin: 0; }
+.service-guide-warning { margin-top: 16px; padding: 10px 11px; border-left: 3px solid var(--ochre); background: rgba(232,163,61,.11); color: var(--text); font-size: 11.5px; line-height: 1.45; }
+.service-guide-actions { display: grid; gap: 8px; margin-top: 10px; }
+
 .tool-form { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: var(--white); box-shadow: var(--shadow-sm); }
 .tool-form-kicker { color: var(--ochre); font-size: 10px; font-weight: 800; letter-spacing: .15em; }
 .tool-form h3 { color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 19px; line-height: 1.2; }
@@ -1079,6 +1099,7 @@ body {
 
   .strategy-card { padding: 17px; }
   .strategy-card h3 { font-size: 17px; }
+  .service-guide { margin-left: 0; max-width: 100%; padding: 16px; }
 
   .landing { padding: 36px 18px 28px; }
   .landing-title { font-size: 30px; }
