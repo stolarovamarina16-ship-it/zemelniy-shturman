@@ -482,7 +482,10 @@ function openLiveCheckDesk() {
 // ===== КАРТОЧКА ЗЕМЕЛЬНОГО ДЕЛА =====
 
 function emptyCase() {
-  return { goal: '', region: '', currentStep: '', nextDate: '', updatedAt: '' };
+  return {
+    goal: '', region: '', currentStep: '', nextDate: '', updatedAt: '',
+    strategyId: '', routeStep: 0, routeStartedAt: ''
+  };
 }
 
 function loadCase() {
@@ -500,7 +503,7 @@ function saveCase(nextCase) {
 }
 
 function hasCase() {
-  return Boolean(activeCase.goal || activeCase.region || activeCase.currentStep || activeCase.nextDate);
+  return Boolean(activeCase.goal || activeCase.region || activeCase.currentStep || activeCase.nextDate || activeCase.strategyId);
 }
 
 function caseContext() {
@@ -508,6 +511,7 @@ function caseContext() {
   return [
     activeCase.goal && `Цель: ${activeCase.goal}`,
     activeCase.region && `Регион: ${activeCase.region}`,
+    activeCase.strategyId && STRATEGIES[activeCase.strategyId] && `Маршрут: ${STRATEGIES[activeCase.strategyId].title}`,
     activeCase.currentStep && `Текущий шаг: ${activeCase.currentStep}`,
     activeCase.nextDate && `Ближайшая дата пользователя: ${activeCase.nextDate}`
   ].filter(Boolean).join('\n');
@@ -543,6 +547,7 @@ function renderCaseCard() {
       [
         ['Цель', activeCase.goal],
         ['Регион', activeCase.region],
+        ['Маршрут', activeCase.strategyId && STRATEGIES[activeCase.strategyId] ? STRATEGIES[activeCase.strategyId].title : ''],
         ['Сейчас', activeCase.currentStep],
         ['Ближайшая дата', readableDate(activeCase.nextDate)]
       ].filter(([, value]) => value).forEach(([label, value]) => {
@@ -632,22 +637,132 @@ function openCaseEditor() {
 
 // ===== ДИАЛОГОВЫЙ АГЕНТ =====
 
+function getActiveStrategy() {
+  return activeCase.strategyId ? STRATEGIES[activeCase.strategyId] : null;
+}
+
+function saveRoute(strategy, stepIndex = 0, extra = {}) {
+  const step = strategy.steps[stepIndex] || '';
+  saveCase({
+    ...activeCase,
+    ...extra,
+    strategyId: String(strategy.id),
+    routeStep: stepIndex,
+    routeStartedAt: activeCase.routeStartedAt || new Date().toISOString(),
+    currentStep: step ? `Шаг ${stepIndex + 1} из ${strategy.steps.length}: ${step}` : 'Маршрут пройден'
+  });
+}
+
+function getRouteStepGuide(step) {
+  if (/НСПД/.test(step)) {
+    return '<div class="route-guide"><strong>Куда идти:</strong> <a href="https://nspd.gov.ru" target="_blank" rel="noopener noreferrer">НСПД</a>. Найдите район или кадастровый квартал, включите нужные слои и сохраните номер либо скрин выбранного места.</div>';
+  }
+  if (/ГИС Торги|лоты на аренду/.test(step)) {
+    return '<div class="route-guide"><strong>Куда идти:</strong> <a href="https://torgi.gov.ru" target="_blank" rel="noopener noreferrer">ГИС Торги</a>. Выберите регион, тип имущества «земельный участок» и сохраните ссылку на лот, срок подачи и размер задатка.</div>';
+  }
+  if (/администрац|местный орган управления землёй/.test(step)) {
+    return '<div class="route-guide"><strong>Куда идти:</strong> на сайт администрации района или в МФЦ. Сначала откройте раздел «Имущество и земельные отношения» и сверяйте форму заявления именно для вашего муниципалитета.</div>';
+  }
+  if (/ПЗЗ|Генплан|ЗОУИТ/.test(step)) {
+    return '<div class="route-guide"><strong>Что проверить:</strong> территориальную зону, допустимый ВРИ, красные линии и ограничения. Обычно ПЗЗ и Генплан опубликованы на сайте администрации в разделе градостроительства.</div>';
+  }
+  if (/Росреестр|ЕГРН/.test(step)) {
+    return '<div class="route-guide"><strong>Где проверить сведения:</strong> на <a href="https://rosreestr.gov.ru" target="_blank" rel="noopener noreferrer">сайте Росреестра</a> или через МФЦ. Сохраните выписку и дату, на которую она получена.</div>';
+  }
+  return '<div class="route-guide"><strong>Результат шага:</strong> сохраните ссылку, документ или краткую заметку. Это поможет продолжить дело без повторного поиска.</div>';
+}
+
+function showRouteActions(strategy) {
+  inputArea.innerHTML = '';
+  const stepIndex = Number(activeCase.routeStep || 0);
+  const completed = stepIndex >= strategy.steps.length;
+  const panel = document.createElement('div');
+  panel.className = 'route-actions';
+
+  const note = document.createElement('p');
+  note.textContent = completed
+    ? 'Маршрут завершён. Сохраните итоговые документы и следите за сроками.'
+    : 'Отметьте только реальный результат — тогда следующий шаг останется понятным.';
+  panel.appendChild(note);
+
+  if (!completed) {
+    const done = document.createElement('button');
+    done.className = 'route-primary-btn';
+    done.textContent = 'Шаг выполнен — показать следующий';
+    done.addEventListener('click', () => {
+      saveRoute(strategy, stepIndex + 1);
+      renderCurrentRouteStep();
+    });
+    panel.appendChild(done);
+  }
+
+  const row = document.createElement('div');
+  row.className = 'route-secondary-actions';
+  const problem = document.createElement('button');
+  problem.className = 'route-secondary-btn';
+  problem.textContent = 'Пришёл отказ или требование';
+  problem.addEventListener('click', openDocumentAnalyzer);
+  const question = document.createElement('button');
+  question.className = 'route-secondary-btn';
+  question.textContent = 'Задать вопрос по шагу';
+  question.addEventListener('click', showAgentComposer);
+  row.append(problem, question);
+  panel.appendChild(row);
+
+  inputArea.appendChild(panel);
+}
+
+function renderCurrentRouteStep() {
+  const strategy = getActiveStrategy();
+  if (!strategy) return showAgentComposer();
+  clearInput();
+  const stepIndex = Number(activeCase.routeStep || 0);
+
+  if (stepIndex >= strategy.steps.length) {
+    saveRoute(strategy, stepIndex);
+    return agentMessage(`<strong>Основной маршрут завершён.</strong><br>Вы прошли «${strategy.title}». Сохраните полученные документы и отметьте важные даты. Если администрация отказала или попросила дополнения — загрузите документ, и я разберу причину.`)
+      .then(renderCaseCard)
+      .then(() => showRouteActions(strategy));
+  }
+
+  const warning = stepIndex === 0 && strategy.warning
+    ? `<div class="route-warning"><strong>Важно:</strong> ${strategy.warning}</div>`
+    : '';
+  const guide = getRouteStepGuide(strategy.steps[stepIndex]);
+  return agentMessage(`<div class="route-step-kicker">ВАШЕ ДЕЛО · ${strategy.title}</div><strong>Шаг ${stepIndex + 1} из ${strategy.steps.length}</strong><br>${strategy.steps[stepIndex]}${guide}${warning}`)
+    .then(() => agentMessage('<span class="agent-base-note">Сделайте только этот шаг. Когда будет результат, нажмите кнопку ниже — я открою следующий.</span>'))
+    .then(() => showRouteActions(strategy));
+}
+
+function continueSavedCase() {
+  if (getActiveStrategy()) return renderCurrentRouteStep();
+  if (hasCase()) return renderCaseCard().then(showAgentComposer);
+  return startRouter();
+}
+
 function showAgentComposer() {
   inputArea.innerHTML = '';
   const quick = document.createElement('div');
   quick.className = 'agent-quick-actions';
-  [
-    ['Найти путь получения', 'Хочу получить участок от государства. Помоги выбрать самый реалистичный путь и начни с ближайшего шага.'],
-    ['Проверить участок / торги', 'live-check'],
-    ['Разобрать PDF / DOCX', 'document'],
-    ['Создать заявление', 'application'],
-    ['Напомнить мне', 'reminder'],
-    ['Моё дело', 'case']
-  ].forEach(([label, action]) => {
+  const actions = hasCase()
+    ? [
+      ['Продолжить моё дело', 'continue'],
+      ['Пришёл отказ / требование', 'document'],
+      ['Проверить участок', 'live-check'],
+      ['Моё дело', 'case']
+    ]
+    : [
+      ['Начать путь к участку', 'start-route'],
+      ['У меня есть отказ', 'document'],
+      ['У меня есть кадастровый номер', 'live-check']
+    ];
+  actions.forEach(([label, action]) => {
     const button = document.createElement('button');
     button.className = 'agent-quick-btn';
     button.textContent = label;
     button.addEventListener('click', () => {
+      if (action === 'start-route') return startRouter();
+      if (action === 'continue') return continueSavedCase();
       if (action === 'live-check') return openLiveCheckDesk();
       if (action === 'document') return openDocumentAnalyzer();
       if (action === 'application') return openApplicationGenerator();
@@ -685,7 +800,7 @@ function showAgentComposer() {
 
   const interview = document.createElement('button');
   interview.className = 'agent-interview-link';
-  interview.textContent = 'Не знаю, с чего начать — пройти короткое интервью';
+  interview.textContent = hasCase() ? 'Начать новое дело с нуля' : 'Не хотите проходить маршрут? Задать вопрос в свободной форме';
   interview.addEventListener('click', startRouter);
   inputArea.append(quick, row, interview);
 }
@@ -717,8 +832,8 @@ function startAgent() {
   conversationHistory = [];
   progressWrap.style.display = 'none';
   clearInput();
-  agentMessage('<strong>Расскажите, что хотите сделать с землёй.</strong><br>Я не буду гонять вас по анкете: сначала разберу задачу, задам только нужные вопросы и дам один понятный следующий шаг.')
-    .then(() => agentMessage('<span class="agent-base-note">Моя база: 37 ключевых учебных материалов, 11 сценариев получения земли и ставки выкупа по 83 регионам. Для актуальных публикаций и статуса участка я направлю к официальным источникам — не буду выдавать догадки за проверку.</span>'))
+  agentMessage('<strong>Помогу начать путь к земле с нуля.</strong><br>Сначала уточню вашу цель и регион. Затем создам одно земельное дело, выберу реалистичный маршрут и буду вести вас по одному шагу — от поиска до подачи документов.')
+    .then(() => agentMessage('<span class="agent-base-note">Если после подачи придёт отказ, не нужно начинать сначала: загрузите документ, и я помогу понять причину и следующий вариант действий.</span>'))
     .then(() => hasCase() ? renderCaseCard() : Promise.resolve())
     .then(showAgentComposer);
   notifyDueReminders(true);
@@ -1065,26 +1180,30 @@ function showResult(strategies) {
   progressWrap.style.display = 'none';
 
   const explanation = explainChoice(strategies, answers);
-  const regionNote = getRegionRateNote(answers);
+  const primary = strategies[0];
   const region = answers.region_ru ? findRegion(answers.region_ru) : null;
+  const regionName = region ? region.name : (answers.region === 'far_east' ? 'Дальний Восток или Арктика' : 'Регион уточняется');
 
-  agentMessage(`Я подобрал маршрут по вашим ответам. ${explanation}`).then(() => {
-    return regionNote ? agentMessage(regionNote) : Promise.resolve();
-  }).then(() => {
-    return renderStrategyCards(strategies);
-  }).then(() => {
-    return renderDueDiligenceChecklist();
-  }).then(() => {
-    return renderDocumentChecklist();
-  }).then(() => {
-    return region ? renderCadastreCalculator(region, answers.form) : Promise.resolve();
-  }).then(() => {
-    return renderDecisionDesk(region);
-  }).then(() => {
-    return agentMessage('Нужна помощь с конкретным шагом? Напишите вопрос или начните подбор заново.');
-  }).then(() => {
-    showFinalActions();
+  if (!primary) {
+    return agentMessage('По этим ответам я не могу безопасно выбрать маршрут. Уточните регион и цель — тогда начнём заново без лишних действий.')
+      .then(showAgentComposer);
+  }
+
+  // Не выдаём человеку все чек-листы и альтернативы одновременно. Сохраняем один
+  // основной маршрут, чтобы при следующем входе он продолжил дело с нужного шага.
+  saveRoute(primary, 0, {
+    goal: answers.goal || activeCase.goal,
+    region: regionName,
+    nextDate: activeCase.nextDate || ''
   });
+
+  agentMessage(`<strong>Я открыла ваше земельное дело.</strong><br>${explanation}`)
+    .then(() => agentMessage(`Основной маршрут: <strong>${primary.title}</strong>. Сейчас не буду перегружать вас альтернативами и документами — сначала пройдём первый проверяемый шаг.`))
+    .then(() => strategies.length > 1
+      ? agentMessage(`<span class="agent-base-note">Есть ещё один запасной вариант: «${strategies[1].title}». Вернёмся к нему, только если основной путь не подойдёт.</span>`)
+      : Promise.resolve())
+    .then(renderCaseCard)
+    .then(renderCurrentRouteStep);
 }
 
 function showFinalActions() {
@@ -1197,8 +1316,8 @@ function startRouter() {
   clearInput();
 
   // Приветственное сообщение
-  agentMessage('Привет! Я <strong>Земельный Штурман</strong>. Помогу разобраться, как получить землю от государства в вашей ситуации.')
-  .then(() => agentMessage('Задам несколько коротких вопросов и покажу подходящий порядок действий. Это займёт около двух минут.'))
+  agentMessage('<strong>Откроем новое земельное дело.</strong><br>Я задам шесть коротких вопросов, чтобы не отправить вас по неподходящему пути.')
+  .then(() => agentMessage('После этого сохраню один основной маршрут и покажу только первый шаг. Остальные шаги будут открываться по мере движения. Это займёт около двух минут.'))
   .then(() => {
     setTimeout(() => askQuestion(0), 300);
   });
