@@ -409,6 +409,92 @@ function renderCadastreCalculator(region, form) {
   });
 }
 
+// «Кабинет решения» — сильный принцип аналитических сервисов: сначала собрать
+// подтверждаемые данные, затем принимать решение. Штурман не выдаёт выдуманную
+// рыночную цену: пользователь видит источники и сам вводит проверенные цифры.
+function renderDecisionDesk(region) {
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.className = 'msg-agent';
+    el.innerHTML = `
+      <div class="agent-avatar">${AGENT_AVATAR_SVG}</div>
+      <div class="bubble-agent decision-bubble">
+        <section class="decision-desk">
+          <div class="decision-kicker">Решение на фактах</div>
+          <h3>Паспорт участка перед заявлением или торгами</h3>
+          <p class="decision-lead">Штурман не обещает цену «на глаз». Сначала соберите подтверждаемые данные, затем посчитайте предел своей ставки.</p>
+          <ol class="source-checklist">
+            <li><span>01</span><div><strong>Границы, ВРИ и ограничения</strong><br>Проверьте кадастровый номер на НСПД.</div></li>
+            <li><span>02</span><div><strong>Конкуренция и документы лота</strong><br>Откройте публикации и протоколы на ГИС Торги.</div></li>
+            <li><span>03</span><div><strong>Реальная цена, а не цена объявления</strong><br>Сопоставьте сделки в кадастровом квартале с особенностями участка.</div></li>
+          </ol>
+          <div class="official-links" aria-label="Официальные источники проверки">
+            <a href="https://nspd.gov.ru" target="_blank" rel="noopener noreferrer">Открыть НСПД</a>
+            <a href="https://torgi.gov.ru" target="_blank" rel="noopener noreferrer">Открыть ГИС Торги</a>
+            <a href="https://rosreestr.gov.ru" target="_blank" rel="noopener noreferrer">Открыть Росреестр</a>
+          </div>
+          <div class="bid-calculator">
+            <div class="bid-title">Предел ставки на торгах</div>
+            <p>Заполните цифры после проверки. Расчёт покажет сумму, выше которой сделка перестаёт соответствовать вашему плану.</p>
+            <label>Ожидаемая цена продажи / ценность для вас, ₽
+              <input class="bid-input" inputmode="numeric" data-bid-field="value" placeholder="Например, 1 100 000">
+            </label>
+            <label>Все расходы кроме ставки, ₽
+              <input class="bid-input" inputmode="numeric" data-bid-field="costs" placeholder="Госпошлина, инженер, подключение, ремонт">
+            </label>
+            <label>Минимальная прибыль или резерв, ₽
+              <input class="bid-input" inputmode="numeric" data-bid-field="reserve" placeholder="Сумма, которую нельзя съедать">
+            </label>
+            <button type="button" class="bid-calc-btn">Рассчитать предел</button>
+            <div class="bid-result" aria-live="polite"></div>
+          </div>
+          <p class="decision-note">Расчёт — ориентир для дисциплины на торгах, а не оценка участка и не юридическое заключение. Перед подачей всё равно проверьте документы, ограничения и фактическое состояние участка.</p>
+        </section>
+      </div>`;
+
+    const result = el.querySelector('.bid-result');
+    const getNumber = (field) => {
+      const input = el.querySelector(`[data-bid-field="${field}"]`);
+      const raw = String(input.value || '').replace(/[^\d,]/g, '').replace(',', '.');
+      return raw ? Number(raw) : null;
+    };
+
+    el.querySelector('.bid-calc-btn').addEventListener('click', () => {
+      const value = getNumber('value');
+      const costs = getNumber('costs');
+      const reserve = getNumber('reserve');
+      result.classList.remove('is-warning', 'is-ready');
+
+      if (value === null || costs === null || reserve === null || value <= 0 || costs < 0 || reserve < 0) {
+        result.textContent = 'Заполните все три поля числами: ценность участка, расходы и резерв.';
+        result.classList.add('is-warning');
+        return;
+      }
+
+      const maxBid = value - costs - reserve;
+      if (maxBid <= 0) {
+        result.textContent = 'При таких вводных ставка не должна быть положительной: проверьте цену, расходы или желаемый резерв.';
+        result.classList.add('is-warning');
+        return;
+      }
+
+      result.innerHTML = '';
+      const label = document.createElement('span');
+      label.textContent = 'Ваша предельная ставка';
+      const amount = document.createElement('strong');
+      amount.textContent = formatMoney(maxBid);
+      const note = document.createElement('small');
+      note.textContent = `Проверьте, что в расходах учтены все обязательные платежи. Регион: ${region ? region.name : 'не указан'}.`;
+      result.append(label, amount, note);
+      result.classList.add('is-ready');
+    });
+
+    chat.appendChild(el);
+    scrollBottom();
+    resolve();
+  });
+}
+
 // Чек-лист того, что реально валит заявки на землю — не привязан к конкретной
 // стратегии, поэтому показывается один раз в результате, а не дублируется
 // в каждой из 11 карточек.
@@ -558,6 +644,8 @@ function showResult(strategies) {
     return renderDocumentChecklist();
   }).then(() => {
     return region ? renderCadastreCalculator(region, answers.form) : Promise.resolve();
+  }).then(() => {
+    return renderDecisionDesk(region);
   }).then(() => {
     return agentMessage('Нужна помощь с конкретным шагом? Напишите вопрос или начните подбор заново.');
   }).then(() => {
