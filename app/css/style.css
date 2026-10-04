@@ -267,6 +267,19 @@ body {
 .agent-interview-link { border: 0; background: transparent; color: var(--text-muted); font: 600 12px/1.4 inherit; padding: 10px 2px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .agent-interview-link:hover { color: var(--ochre); }
 
+.tool-form { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: var(--white); box-shadow: var(--shadow-sm); }
+.tool-form-kicker { color: var(--ochre); font-size: 10px; font-weight: 800; letter-spacing: .15em; }
+.tool-form h3 { color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 19px; line-height: 1.2; }
+.tool-form > p { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.tool-select, .tool-input, .tool-date-input, .tool-file-input { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--text); font: 400 13px inherit; padding: 10px; outline: none; }
+.tool-select:focus, .tool-input:focus, .tool-date-input:focus { border-color: var(--moss); box-shadow: 0 0 0 3px rgba(92,138,90,.13); }
+.tool-textarea { border-radius: 10px; resize: vertical; }
+.tool-check { display: flex; align-items: flex-start; gap: 8px; color: var(--text-muted); font-size: 12px; line-height: 1.4; cursor: pointer; }
+.tool-check input { margin-top: 2px; accent-color: var(--moss); }
+.tool-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.draft-result { margin-left: 45px; max-width: calc(92% - 45px); padding: 14px; background: var(--white); border: 1px solid var(--line); border-radius: 4px var(--radius) var(--radius) var(--radius); box-shadow: var(--shadow-sm); }
+.draft-result textarea { display: block; width: 100%; min-height: 280px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--text); font: 13px/1.5 'Manrope', sans-serif; padding: 12px; resize: vertical; }
+
 .case-bubble { width: min(100%, 470px); padding: 0; overflow: hidden; }
 .case-card { padding: 18px; background: linear-gradient(130deg, #fffdf7, #edf4e9); }
 .case-kicker { color: var(--ochre); font-size: 10px; font-weight: 800; letter-spacing: .16em; }
