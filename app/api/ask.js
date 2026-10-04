@@ -6,7 +6,7 @@ const https = require('https');
 const STRATEGIES = require('../js/strategies.js');
 const { REGIONS } = require('../js/region-data.js');
 const COURSE_LIBRARY = require('../data/knowledge-v1.json');
-const { CORE_POLICY, FINAL_CHECK } = require('../data/agent-policy.js');
+const { CORE_POLICY, FINAL_CHECK, SERVICE_GUIDANCE } = require('../data/agent-policy.js');
 
 const MODEL = 'anthropic/claude-haiku-4.5';
 const MAX_REQUESTS_PER_HOUR = 12;
@@ -73,6 +73,8 @@ function retrieveCourseContext(question, caseContext) {
 }
 
 const SYSTEM_PROMPT = `${CORE_POLICY}
+
+${SERVICE_GUIDANCE}
 
 Ты отвечаешь в свободном чате, поэтому не повторяй вопрос пользователя и не перегружай его всеми возможными стратегиями.
 
