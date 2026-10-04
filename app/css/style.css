@@ -206,6 +206,7 @@ body {
 }
 
 .bubble-agent strong { color: var(--forest-900); font-weight: 700; }
+.agent-base-note { color: var(--text-muted); font-size: 13px; line-height: 1.55; }
 
 /* Пузырь пользователя */
 .msg-user {
@@ -256,6 +257,15 @@ body {
   flex-shrink: 0;
   background: var(--paper);
 }
+
+.agent-quick-actions { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: thin; }
+.agent-quick-btn { white-space: nowrap; background: var(--moss-pale); color: var(--forest-900); border: 1px solid rgba(92,138,90,.42); border-radius: 999px; padding: 8px 11px; font: 700 12px/1.2 inherit; cursor: pointer; }
+.agent-quick-btn:hover { background: #b8d3b1; }
+.agent-quick-btn:disabled { opacity: .55; cursor: wait; }
+.agent-composer-row { align-items: stretch; }
+.agent-textarea { resize: none; min-height: 48px; line-height: 1.4; padding-top: 11px; }
+.agent-interview-link { border: 0; background: transparent; color: var(--text-muted); font: 600 12px/1.4 inherit; padding: 10px 2px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.agent-interview-link:hover { color: var(--ochre); }
 
 /* Сетка кнопок-вариантов */
 .options-grid {
@@ -968,6 +978,8 @@ body {
   text-align: left;
   margin-bottom: 28px;
 }
+
+.landing-data-note { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--text-muted); font-size: 12.5px; line-height: 1.55; }
 
 .landing-footer {
   font-size: 13px;
