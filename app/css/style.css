@@ -267,6 +267,19 @@ body {
 .agent-interview-link { border: 0; background: transparent; color: var(--text-muted); font: 600 12px/1.4 inherit; padding: 10px 2px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .agent-interview-link:hover { color: var(--ochre); }
 
+/* Один следующий шаг вместо набора равноправных инструментов */
+.route-actions { display: grid; gap: 10px; padding: 14px; border: 1px solid rgba(92,138,90,.38); border-radius: var(--radius); background: linear-gradient(135deg, #f8fcf6, #edf4e9); box-shadow: var(--shadow-sm); }
+.route-actions > p { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.route-primary-btn { width: 100%; border: 0; border-radius: 10px; padding: 12px 15px; background: linear-gradient(155deg, var(--forest-800), var(--forest-950)); color: var(--paper); font: 800 13px/1.2 inherit; cursor: pointer; box-shadow: var(--shadow-sm); transition: transform .16s var(--ease-out), box-shadow .16s; }
+.route-primary-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.route-secondary-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.route-secondary-btn { border: 1px solid rgba(92,138,90,.4); border-radius: 8px; padding: 8px 10px; background: rgba(255,255,255,.72); color: var(--forest-900); font: 700 12px/1.25 inherit; cursor: pointer; }
+.route-secondary-btn:hover { background: var(--moss-pale); }
+.route-step-kicker { margin-bottom: 7px; color: var(--ochre); font-size: 10px; font-weight: 800; letter-spacing: .13em; }
+.route-guide { margin-top: 12px; padding: 10px 11px; border-radius: 8px; background: var(--paper-dim); color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.route-guide a { color: var(--forest-700); font-weight: 800; }
+.route-warning { margin-top: 12px; padding: 10px 11px; border-left: 3px solid var(--ochre); border-radius: 4px 8px 8px 4px; background: var(--paper-dim); color: var(--text); font-size: 13px; line-height: 1.45; }
+
 .tool-form { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: var(--white); box-shadow: var(--shadow-sm); }
 .tool-form-kicker { color: var(--ochre); font-size: 10px; font-weight: 800; letter-spacing: .15em; }
 .tool-form h3 { color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 19px; line-height: 1.2; }
