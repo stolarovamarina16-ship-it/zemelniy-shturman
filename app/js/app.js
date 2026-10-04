@@ -608,7 +608,9 @@ function openSchemeGuide() {
 function emptyCase() {
   return {
     goal: '', region: '', currentStep: '', nextDate: '', updatedAt: '',
-    strategyId: '', routeStep: 0, routeStartedAt: ''
+    strategyId: '', routeStep: 0, routeStartedAt: '',
+    cadastreNumber: '', plotLocation: '', municipality: '', authorityUrl: '',
+    regulationUrl: '', pzzUrl: '', schemeStatus: ''
   };
 }
 
@@ -627,7 +629,7 @@ function saveCase(nextCase) {
 }
 
 function hasCase() {
-  return Boolean(activeCase.goal || activeCase.region || activeCase.currentStep || activeCase.nextDate || activeCase.strategyId);
+  return Boolean(activeCase.goal || activeCase.region || activeCase.currentStep || activeCase.nextDate || activeCase.strategyId || activeCase.cadastreNumber || activeCase.plotLocation || activeCase.municipality);
 }
 
 function caseContext() {
@@ -635,6 +637,10 @@ function caseContext() {
   return [
     activeCase.goal && `Цель: ${activeCase.goal}`,
     activeCase.region && `Регион: ${activeCase.region}`,
+    activeCase.municipality && `Муниципалитет: ${activeCase.municipality}`,
+    activeCase.cadastreNumber && `Кадастровый номер: ${activeCase.cadastreNumber}`,
+    activeCase.plotLocation && `Местоположение участка: ${activeCase.plotLocation}`,
+    activeCase.schemeStatus && `Статус схемы: ${activeCase.schemeStatus}`,
     activeCase.strategyId && STRATEGIES[activeCase.strategyId] && `Маршрут: ${STRATEGIES[activeCase.strategyId].title}`,
     activeCase.currentStep && `Текущий шаг: ${activeCase.currentStep}`,
     activeCase.nextDate && `Ближайшая дата пользователя: ${activeCase.nextDate}`
@@ -671,6 +677,9 @@ function renderCaseCard() {
       [
         ['Цель', activeCase.goal],
         ['Регион', activeCase.region],
+        ['Участок', activeCase.cadastreNumber || activeCase.plotLocation],
+        ['Муниципалитет', activeCase.municipality],
+        ['Схема', activeCase.schemeStatus],
         ['Маршрут', activeCase.strategyId && STRATEGIES[activeCase.strategyId] ? STRATEGIES[activeCase.strategyId].title : ''],
         ['Сейчас', activeCase.currentStep],
         ['Ближайшая дата', readableDate(activeCase.nextDate)]
@@ -680,6 +689,21 @@ function renderCaseCard() {
         facts.append(dt, dd);
       });
       card.appendChild(facts);
+
+      const sourceLinks = [
+        ['Администрация', activeCase.authorityUrl],
+        ['Регламент', activeCase.regulationUrl],
+        ['ПЗЗ / карта', activeCase.pzzUrl]
+      ].filter(([, url]) => safeExternalUrl(url));
+      if (sourceLinks.length) {
+        const sources = document.createElement('div'); sources.className = 'passport-source-row';
+        sourceLinks.forEach(([label, url]) => {
+          const link = document.createElement('a');
+          link.href = safeExternalUrl(url); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = label;
+          sources.appendChild(link);
+        });
+        card.appendChild(sources);
+      }
     }
 
     const edit = document.createElement('button');
@@ -687,6 +711,11 @@ function renderCaseCard() {
     edit.textContent = hasCase() ? 'Обновить дело' : 'Создать дело';
     edit.addEventListener('click', openCaseEditor);
     card.appendChild(edit);
+    const passport = document.createElement('button');
+    passport.className = 'case-edit-btn case-passport-btn';
+    passport.textContent = activeCase.cadastreNumber || activeCase.plotLocation ? 'Открыть паспорт участка' : 'Создать паспорт участка';
+    passport.addEventListener('click', openPlotPassport);
+    card.appendChild(passport);
     el.querySelector('.case-bubble').appendChild(card);
     chat.appendChild(el);
     scrollBottom();
@@ -757,6 +786,70 @@ function openCaseEditor() {
   cancel.addEventListener('click', showAgentComposer);
   inputArea.appendChild(form);
   inputs.goal.focus();
+}
+
+// Самый полезный следующий слой после маршрута: не большая база данных, а
+// один сохранённый «паспорт» выбранного участка с первоисточниками.
+function openPlotPassport() {
+  inputArea.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'case-form plot-passport-form';
+  const title = document.createElement('div');
+  title.className = 'case-form-title';
+  title.textContent = 'Паспорт участка';
+  const hint = document.createElement('p');
+  hint.textContent = 'Сохраните только проверенные сведения и ссылки. Это не заключение о возможности предоставления участка — оно помогает не потерять результаты проверок.';
+  const links = document.createElement('div');
+  links.className = 'service-link-row';
+  links.innerHTML = '<a href="https://nspd.gov.ru" target="_blank" rel="noopener noreferrer">НСПД</a><a href="https://fgistp.economy.gov.ru" target="_blank" rel="noopener noreferrer">ФГИС ТП / ПЗЗ</a><a href="https://torgi.gov.ru" target="_blank" rel="noopener noreferrer">ГИС Торги</a>';
+  form.append(title, hint, links);
+
+  const fields = [
+    ['cadastreNumber', 'Кадастровый номер', 'Например: 50:11:0010101:100'],
+    ['plotLocation', 'Адрес или ориентир участка', 'Населённый пункт, квартал, ориентир'],
+    ['municipality', 'Муниципалитет', 'Район, городской округ или поселение'],
+    ['authorityUrl', 'Официальный сайт администрации', 'Вставьте ссылку https://…', 'url'],
+    ['regulationUrl', 'Ссылка на регламент или услугу', 'Если уже найдена', 'url'],
+    ['pzzUrl', 'Ссылка на ПЗЗ / карту', 'Если уже найдена', 'url']
+  ];
+  const inputs = {};
+  fields.forEach(([key, label, placeholder, type = 'text']) => {
+    const wrap = document.createElement('label');
+    wrap.className = 'case-field'; wrap.textContent = label;
+    const input = document.createElement('input');
+    input.type = type; input.placeholder = placeholder; input.maxLength = 500;
+    input.value = activeCase[key] || '';
+    wrap.appendChild(input); form.appendChild(wrap); inputs[key] = input;
+  });
+
+  const statusWrap = document.createElement('label');
+  statusWrap.className = 'case-field'; statusWrap.textContent = 'Статус схемы';
+  const status = document.createElement('select'); status.className = 'tool-select';
+  ['', 'Место найдено', 'Проверено в НСПД', 'Контур нарисован', 'Схема сохранена', 'Подано в администрацию'].forEach(value => {
+    const option = document.createElement('option'); option.value = value; option.textContent = value || 'Пока не выбрано';
+    if (value === activeCase.schemeStatus) option.selected = true;
+    status.appendChild(option);
+  });
+  statusWrap.appendChild(status); form.appendChild(statusWrap);
+
+  const actions = document.createElement('div'); actions.className = 'case-form-actions';
+  const save = document.createElement('button'); save.type = 'submit'; save.className = 'send-btn'; save.textContent = 'Сохранить паспорт';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'case-cancel-btn'; cancel.textContent = 'Отмена';
+  actions.append(save, cancel); form.appendChild(actions);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const values = Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()]));
+    const invalidUrl = ['authorityUrl', 'regulationUrl', 'pzzUrl'].find(key => values[key] && !safeExternalUrl(values[key]));
+    if (invalidUrl) { inputs[invalidUrl].focus(); return; }
+    saveCase({ ...activeCase, ...values, schemeStatus: status.value });
+    clearInput();
+    agentTextMessage('Паспорт участка сохранён на этом устройстве. Дальше можно открыть требования администрации или продолжить маршрут.')
+      .then(renderCaseCard)
+      .then(showAgentComposer);
+  });
+  cancel.addEventListener('click', showAgentComposer);
+  inputArea.appendChild(form);
+  inputs.cadastreNumber.focus();
 }
 
 // ===== ДИАЛОГОВЫЙ АГЕНТ =====
@@ -875,6 +968,7 @@ function showAgentComposer() {
   const actions = hasCase()
     ? [
       ['Продолжить моё дело', 'continue'],
+      ['Паспорт участка', 'plot-passport'],
       ['Подать в администрацию', 'municipality'],
       ['Нарисовать схему', 'scheme-guide'],
       ['Пришёл отказ / требование', 'document'],
@@ -883,6 +977,7 @@ function showAgentComposer() {
     ]
     : [
       ['Начать путь к участку', 'start-route'],
+      ['Паспорт участка', 'plot-passport'],
       ['Подать в администрацию', 'municipality'],
       ['Нарисовать схему', 'scheme-guide'],
       ['У меня есть отказ', 'document'],
@@ -897,6 +992,7 @@ function showAgentComposer() {
       if (action === 'continue') return continueSavedCase();
       if (action === 'scheme-guide') return openSchemeGuide();
       if (action === 'live-check') return openLiveCheckDesk();
+      if (action === 'plot-passport') return openPlotPassport();
       if (action === 'municipality') return openMunicipalityDesk();
       if (action === 'document') return openDocumentAnalyzer();
       if (action === 'application') return openApplicationGenerator();
