@@ -12,10 +12,16 @@ const answers = {};
 // Последние реплики дают агенту контекст, но не хранятся на сервере.
 let conversationHistory = [];
 
-// Карточка дела хранится только в браузере пользователя. Это позволяет вернуться
-// к своему маршруту без регистрации и без передачи персональных данных на сервер.
+// Дела и лоты хранятся только в браузере пользователя. Это позволяет вести
+// несколько участков без регистрации и без передачи персональных данных на сервер.
 const CASE_STORAGE_KEY = 'zemelniy-shturman-case-v1';
-let activeCase = loadCase();
+const CASES_STORAGE_KEY = 'zemelniy-shturman-cases-v1';
+const ACTIVE_CASE_STORAGE_KEY = 'zemelniy-shturman-active-case-v1';
+const AUCTIONS_STORAGE_KEY = 'zemelniy-shturman-auctions-v1';
+let cases = loadCases();
+let activeCaseId = loadActiveCaseId();
+let activeCase = loadActiveCase();
+let auctionLots = loadAuctionLots();
 const REMINDERS_STORAGE_KEY = 'zemelniy-shturman-reminders-v1';
 let reminders = loadReminders();
 
@@ -607,6 +613,7 @@ function openSchemeGuide() {
 
 function emptyCase() {
   return {
+    id: '', caseName: '',
     goal: '', region: '', currentStep: '', nextDate: '', updatedAt: '',
     strategyId: '', routeStep: 0, routeStartedAt: '',
     cadastreNumber: '', plotLocation: '', municipality: '', authorityUrl: '',
@@ -614,7 +621,15 @@ function emptyCase() {
   };
 }
 
-function loadCase() {
+function createLocalId(prefix) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isMeaningfulCase(item) {
+  return Boolean(item && (item.goal || item.region || item.currentStep || item.nextDate || item.strategyId || item.cadastreNumber || item.plotLocation || item.municipality));
+}
+
+function loadLegacyCase() {
   try {
     const saved = JSON.parse(localStorage.getItem(CASE_STORAGE_KEY) || 'null');
     return saved && typeof saved === 'object' ? { ...emptyCase(), ...saved } : emptyCase();
@@ -623,9 +638,76 @@ function loadCase() {
   }
 }
 
+function loadCases() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CASES_STORAGE_KEY) || '[]');
+    if (Array.isArray(saved) && saved.length) {
+      return saved.filter(item => item && typeof item === 'object').map(item => ({ ...emptyCase(), ...item, id: item.id || createLocalId('case') }));
+    }
+  } catch (e) { /* браузер может вернуть повреждённые данные */ }
+
+  const legacy = loadLegacyCase();
+  return isMeaningfulCase(legacy) ? [{ ...legacy, id: createLocalId('case') }] : [];
+}
+
+function loadActiveCaseId() {
+  try {
+    const savedId = localStorage.getItem(ACTIVE_CASE_STORAGE_KEY);
+    return cases.some(item => item.id === savedId) ? savedId : (cases[0]?.id || '');
+  } catch (e) {
+    return cases[0]?.id || '';
+  }
+}
+
+function loadActiveCase() {
+  const found = cases.find(item => item.id === activeCaseId);
+  return found ? { ...emptyCase(), ...found } : emptyCase();
+}
+
+function persistCases() {
+  try {
+    localStorage.setItem(CASES_STORAGE_KEY, JSON.stringify(cases));
+    localStorage.setItem(ACTIVE_CASE_STORAGE_KEY, activeCaseId);
+    // Дублируем активное дело в прежнем ключе, чтобы обновление не ломало
+    // уже сохранённый маршрут у пользователя со старой версией приложения.
+    localStorage.setItem(CASE_STORAGE_KEY, JSON.stringify(activeCase));
+  } catch (e) { /* браузер может запретить хранилище */ }
+}
+
 function saveCase(nextCase) {
-  activeCase = { ...emptyCase(), ...nextCase, updatedAt: new Date().toISOString() };
-  try { localStorage.setItem(CASE_STORAGE_KEY, JSON.stringify(activeCase)); } catch (e) { /* браузер может запретить хранилище */ }
+  const id = nextCase.id || activeCase.id || activeCaseId || createLocalId('case');
+  activeCase = { ...emptyCase(), ...nextCase, id, updatedAt: new Date().toISOString() };
+  activeCaseId = id;
+  cases = [...cases.filter(item => item.id !== id), activeCase];
+  persistCases();
+}
+
+function switchActiveCase(id) {
+  const found = cases.find(item => item.id === id);
+  if (!found) return false;
+  activeCaseId = id;
+  activeCase = { ...emptyCase(), ...found };
+  persistCases();
+  return true;
+}
+
+function removeActiveCase() {
+  if (!activeCaseId) return;
+  cases = cases.filter(item => item.id !== activeCaseId);
+  activeCaseId = cases[0]?.id || '';
+  activeCase = loadActiveCase();
+  persistCases();
+}
+
+function caseTitle(item) {
+  return item.caseName || item.goal || item.cadastreNumber || item.plotLocation || 'Новое земельное дело';
+}
+
+function caseStatus(item) {
+  if (item.schemeStatus === 'Подано в администрацию' || item.currentStep?.includes('ответ')) return 'Жду ответ администрации';
+  if (item.currentStep?.includes('торг')) return 'В торгах';
+  if (item.cadastreNumber || item.plotLocation) return 'Проверяю участок';
+  return item.goal ? 'Ищу подходящее место' : 'Черновик';
 }
 
 function hasCase() {
@@ -662,7 +744,7 @@ function renderCaseCard() {
     card.className = 'case-card';
     const eyebrow = document.createElement('div');
     eyebrow.className = 'case-kicker';
-    eyebrow.textContent = 'МОЁ ДЕЛО';
+    eyebrow.textContent = cases.length > 1 ? `МОЁ ДЕЛО · ${cases.length} В ПОРТФЕЛЕ` : 'МОЁ ДЕЛО';
     const heading = document.createElement('h3');
     heading.textContent = hasCase() ? 'Ваш маршрут сохранён' : 'Здесь будет ваше земельное дело';
     const text = document.createElement('p');
@@ -706,6 +788,11 @@ function renderCaseCard() {
       }
     }
 
+    const portfolio = document.createElement('button');
+    portfolio.className = 'case-edit-btn';
+    portfolio.textContent = 'Все мои участки';
+    portfolio.addEventListener('click', openPortfolio);
+    card.appendChild(portfolio);
     const edit = document.createElement('button');
     edit.className = 'case-edit-btn';
     edit.textContent = hasCase() ? 'Обновить дело' : 'Создать дело';
@@ -740,6 +827,7 @@ function openCaseEditor() {
   form.append(title, hint);
 
   const fields = [
+    ['caseName', 'Название дела', 'Например: участок под дом в Тверской области'],
     ['goal', 'Ваша цель', 'Например: участок под ИЖС'],
     ['region', 'Регион или город', 'Например: Тверская область'],
     ['currentStep', 'На каком шаге вы сейчас', 'Например: ищу участок на НСПД'],
@@ -773,10 +861,9 @@ function openCaseEditor() {
     const clear = document.createElement('button');
     clear.type = 'button'; clear.className = 'case-clear-btn'; clear.textContent = 'Удалить это дело с устройства';
     clear.addEventListener('click', () => {
-      activeCase = emptyCase();
-      try { localStorage.removeItem(CASE_STORAGE_KEY); } catch (e) { /* see saveCase */ }
+      removeActiveCase();
       clearInput();
-      agentTextMessage('Карточка дела удалена с этого устройства.').then(showAgentComposer);
+      agentTextMessage('Дело удалено с этого устройства.').then(openPortfolio);
     });
     form.appendChild(clear);
   }
@@ -1048,12 +1135,120 @@ function continueSavedCase() {
   return startRouter();
 }
 
+function startNewCase() {
+  activeCaseId = '';
+  activeCase = emptyCase();
+  startRouter();
+}
+
+function openPortfolio() {
+  chat.innerHTML = '';
+  conversationHistory = [];
+  progressWrap.style.display = 'none';
+  clearInput();
+
+  agentMessage('<strong>Мои участки</strong><br>Здесь каждое дело ведётся отдельно. Выберите участок, чтобы продолжить его маршрут, или создайте новый.').then(() => {
+    const panel = document.createElement('section');
+    panel.className = 'portfolio-panel';
+    const summary = document.createElement('p');
+    summary.className = 'portfolio-summary';
+    summary.textContent = cases.length ? `В портфеле: ${cases.length}. Активное дело выделено.` : 'Пока нет сохранённых дел. Можно начать с цели или добавить уже найденный участок.';
+    panel.appendChild(summary);
+
+    const list = document.createElement('div');
+    list.className = 'portfolio-list';
+    cases.slice().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).forEach(item => {
+      const card = document.createElement('article');
+      card.className = `portfolio-case${item.id === activeCaseId ? ' is-active' : ''}`;
+      const title = document.createElement('strong'); title.textContent = caseTitle(item);
+      const meta = document.createElement('span'); meta.textContent = [caseStatus(item), item.region, item.currentStep].filter(Boolean).join(' · ');
+      const open = document.createElement('button');
+      open.className = 'portfolio-open-btn'; open.textContent = item.id === activeCaseId ? 'Открыто' : 'Открыть';
+      open.addEventListener('click', () => {
+        switchActiveCase(item.id);
+        chat.innerHTML = '';
+        agentTextMessage(`Открыла дело «${caseTitle(activeCase)}».`).then(continueSavedCase);
+      });
+      card.append(title, meta, open); list.appendChild(card);
+    });
+    panel.appendChild(list);
+    chat.appendChild(panel);
+    scrollBottom();
+
+    const actions = document.createElement('div'); actions.className = 'portfolio-actions';
+    const newCase = document.createElement('button'); newCase.className = 'route-primary-btn'; newCase.textContent = 'Создать новое дело'; newCase.addEventListener('click', startNewCase);
+    const auctions = document.createElement('button'); auctions.className = 'route-secondary-btn'; auctions.textContent = `Торги${auctionLots.length ? ` · ${auctionLots.length}` : ''}`; auctions.addEventListener('click', openAuctionDesk);
+    const back = document.createElement('button'); back.className = 'route-secondary-btn'; back.textContent = 'Вернуться в чат'; back.addEventListener('click', startAgent);
+    actions.append(newCase, auctions, back); inputArea.appendChild(actions);
+  });
+}
+
+function emptyAuctionLot() {
+  return { id: '', title: '', source: '', deadline: '', status: 'Наблюдаю', linkedCaseId: '', createdAt: '', updatedAt: '' };
+}
+
+function loadAuctionLots() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUCTIONS_STORAGE_KEY) || '[]');
+    return Array.isArray(saved) ? saved.filter(item => item && typeof item === 'object').map(item => ({ ...emptyAuctionLot(), ...item, id: item.id || createLocalId('lot') })) : [];
+  } catch (e) { return []; }
+}
+
+function saveAuctionLots() {
+  try { localStorage.setItem(AUCTIONS_STORAGE_KEY, JSON.stringify(auctionLots)); } catch (e) { /* браузер может запретить хранилище */ }
+}
+
+function openAuctionDesk() {
+  chat.innerHTML = '';
+  progressWrap.style.display = 'none';
+  clearInput();
+  agentMessage('<strong>Торги</strong><br>Добавьте лот ссылкой из ГИС Торги или кадастровым номером. Я сохраню срок, свяжу лот с участком и помогу пройти проверку до заявки.').then(() => {
+    const panel = document.createElement('section'); panel.className = 'auction-panel';
+    const note = document.createElement('p'); note.className = 'auction-note'; note.textContent = 'Автоподбор публичных лотов появится после подключения подтверждённого источника. Сейчас лоты можно добавлять вручную — это надёжный способ ничего не потерять.';
+    const list = document.createElement('div'); list.className = 'auction-list';
+    if (!auctionLots.length) {
+      const empty = document.createElement('div'); empty.className = 'auction-empty'; empty.textContent = 'Пока нет добавленных лотов.'; list.appendChild(empty);
+    }
+    auctionLots.slice().sort((a, b) => String(a.deadline || '9999').localeCompare(String(b.deadline || '9999'))).forEach(lot => {
+      const card = document.createElement('article'); card.className = 'auction-lot';
+      const title = document.createElement('strong'); title.textContent = lot.title || 'Лот без названия';
+      const linked = cases.find(item => item.id === lot.linkedCaseId);
+      const meta = document.createElement('span'); meta.textContent = [lot.status, lot.deadline ? `заявки до ${readableDate(lot.deadline)}` : 'срок не указан', linked ? `дело: ${caseTitle(linked)}` : 'дело не выбрано'].join(' · ');
+      const actions = document.createElement('div'); actions.className = 'auction-lot-actions';
+      if (safeExternalUrl(lot.source)) {
+        const source = document.createElement('a'); source.href = safeExternalUrl(lot.source); source.target = '_blank'; source.rel = 'noopener noreferrer'; source.textContent = 'Открыть лот'; actions.appendChild(source);
+      }
+      const check = document.createElement('button'); check.type = 'button'; check.textContent = 'Проверить с ЗемляБотом'; check.addEventListener('click', () => {
+        if (linked) switchActiveCase(linked.id);
+        sendAgentQuestion(`Помоги проверить лот для торгов: ${lot.title}. Источник или номер: ${lot.source || 'не указан'}. Сначала назови один самый важный шаг и что проверить до заявки.`, `Проверить лот: ${lot.title}`);
+      });
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'auction-remove-btn'; remove.textContent = 'Убрать'; remove.addEventListener('click', () => { auctionLots = auctionLots.filter(item => item.id !== lot.id); saveAuctionLots(); openAuctionDesk(); });
+      actions.append(check, remove); card.append(title, meta, actions); list.appendChild(card);
+    });
+    panel.append(note, list); chat.appendChild(panel); scrollBottom();
+
+    const form = document.createElement('form'); form.className = 'auction-form';
+    form.innerHTML = '<div class="tool-form-kicker">НОВЫЙ ЛОТ</div><h3>Добавить лот в наблюдение</h3><p>Ссылку из ГИС Торги можно вставить целиком. Если её пока нет, укажите кадастровый номер или краткое название.</p>';
+    const title = document.createElement('input'); title.className = 'tool-input'; title.placeholder = 'Например: аренда участка под ИЖС'; title.required = true; title.maxLength = 180;
+    const source = document.createElement('input'); source.className = 'tool-input'; source.placeholder = 'Ссылка ГИС Торги или кадастровый номер'; source.maxLength = 500;
+    const deadline = document.createElement('input'); deadline.className = 'tool-date-input'; deadline.type = 'date';
+    const status = document.createElement('select'); status.className = 'tool-select'; ['Наблюдаю', 'Готовлю заявку', 'Заявка подана', 'Допущен(а)', 'Торги завершены'].forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; status.appendChild(option); });
+    const caseSelect = document.createElement('select'); caseSelect.className = 'tool-select'; const none = document.createElement('option'); none.value = ''; none.textContent = 'Не связывать с делом пока'; caseSelect.appendChild(none); cases.forEach(item => { const option = document.createElement('option'); option.value = item.id; option.textContent = caseTitle(item); if (item.id === activeCaseId) option.selected = true; caseSelect.appendChild(option); });
+    const submit = document.createElement('button'); submit.type = 'submit'; submit.className = 'send-btn'; submit.textContent = 'Сохранить лот';
+    form.append(title, source, deadline, status, caseSelect, submit);
+    form.addEventListener('submit', event => { event.preventDefault(); auctionLots.push({ ...emptyAuctionLot(), id: createLocalId('lot'), title: title.value.trim(), source: source.value.trim(), deadline: deadline.value, status: status.value, linkedCaseId: caseSelect.value, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }); saveAuctionLots(); openAuctionDesk(); });
+    inputArea.appendChild(form);
+  });
+}
+
 function showAgentComposer() {
   inputArea.innerHTML = '';
   const quick = document.createElement('div');
   quick.className = 'agent-quick-actions';
   const actions = hasCase()
     ? [
+      ['Мои участки', 'portfolio'],
+      ['Торги', 'auctions'],
       ['Продолжить моё дело', 'continue'],
       ['Паспорт участка', 'plot-passport'],
       ['Готовность к подаче', 'submission-readiness'],
@@ -1064,6 +1259,8 @@ function showAgentComposer() {
       ['Моё дело', 'case']
     ]
     : [
+      ['Мои участки', 'portfolio'],
+      ['Торги', 'auctions'],
       ['Начать путь к участку', 'start-route'],
       ['Паспорт участка', 'plot-passport'],
       ['Готовность к подаче', 'submission-readiness'],
@@ -1077,7 +1274,9 @@ function showAgentComposer() {
     button.className = 'agent-quick-btn';
     button.textContent = label;
     button.addEventListener('click', () => {
-      if (action === 'start-route') return startRouter();
+      if (action === 'start-route') return startNewCase();
+      if (action === 'portfolio') return openPortfolio();
+      if (action === 'auctions') return openAuctionDesk();
       if (action === 'continue') return continueSavedCase();
       if (action === 'scheme-guide') return openSchemeGuide();
       if (action === 'live-check') return openLiveCheckDesk();
@@ -1121,7 +1320,7 @@ function showAgentComposer() {
   const interview = document.createElement('button');
   interview.className = 'agent-interview-link';
   interview.textContent = hasCase() ? 'Начать новое дело с нуля' : 'Не хотите проходить маршрут? Задать вопрос в свободной форме';
-  interview.addEventListener('click', startRouter);
+  interview.addEventListener('click', hasCase() ? startNewCase : startRouter);
   inputArea.append(quick, row, interview);
 }
 
@@ -1656,3 +1855,5 @@ document.getElementById('landing-start').addEventListener('click', () => {
     startAgent();
   }, 300);
 });
+
+document.getElementById('portfolio-button').addEventListener('click', openPortfolio);
