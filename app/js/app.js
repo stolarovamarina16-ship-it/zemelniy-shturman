@@ -619,8 +619,9 @@ function emptyCase() {
     cadastreNumber: '', plotLocation: '', municipality: '', authorityUrl: '',
     regulationUrl: '', pzzUrl: '', schemeStatus: '', submissionChecks: {},
     regionCode: '', searchCenter: '', searchRadius: '', plotSize: '',
-    priorityOne: '', priorityTwo: '', travelTime: '', allSeasonRoad: false,
-    futurePlan: '', authorityName: ''
+    goalPreset: '', vri: '', strategyPreference: '',
+    priorities: [], priorityOne: '', priorityTwo: '', travelTime: '', travelTimePriority: false,
+    allSeasonRoad: false, futurePlan: '', authorityName: ''
   };
 }
 
@@ -717,6 +718,17 @@ function hasCase() {
   return Boolean(activeCase.goal || activeCase.region || activeCase.currentStep || activeCase.nextDate || activeCase.strategyId || activeCase.cadastreNumber || activeCase.plotLocation || activeCase.municipality || activeCase.searchCenter);
 }
 
+function casePriorities(item = activeCase) {
+  const saved = Array.isArray(item.priorities) ? item.priorities.filter(Boolean) : [];
+  if (saved.length) return saved;
+  const legacy = [item.priorityOne, item.priorityTwo].filter(Boolean);
+  if (item.allSeasonRoad && !legacy.includes('Круглогодичный подъезд')) legacy.push('Круглогодичный подъезд');
+  if (item.travelTimePriority && item.travelTime && !legacy.some(value => value.startsWith('Время в дороге'))) {
+    legacy.push(`Время в дороге: до ${item.travelTime} минут`);
+  }
+  return legacy;
+}
+
 function caseContext() {
   if (!hasCase()) return '';
   return [
@@ -725,7 +737,8 @@ function caseContext() {
     activeCase.searchCenter && `Центр поиска: ${activeCase.searchCenter}`,
     activeCase.searchRadius && `Радиус поиска: до ${activeCase.searchRadius} км`,
     activeCase.plotSize && `Площадь: ${activeCase.plotSize}`,
-    [activeCase.priorityOne, activeCase.priorityTwo].filter(Boolean).length && `Приоритеты: ${[activeCase.priorityOne, activeCase.priorityTwo].filter(Boolean).join('; ')}`,
+    casePriorities().length && `Приоритеты: ${casePriorities().join('; ')}`,
+    activeCase.vri && `Планируемый ВРИ: ${activeCase.vri}`,
     activeCase.travelTime && `Дорога: до ${activeCase.travelTime} минут`,
     activeCase.allSeasonRoad && 'Нужен круглогодичный подъезд',
     activeCase.futurePlan && `Перспектива: ${activeCase.futurePlan}`,
@@ -772,7 +785,8 @@ function renderCaseCard() {
         ['Регион', activeCase.region],
         ['Поиск', [activeCase.searchCenter, activeCase.searchRadius && `до ${activeCase.searchRadius} км`].filter(Boolean).join(' · ')],
         ['Площадь', activeCase.plotSize],
-        ['Важно', [activeCase.priorityOne, activeCase.priorityTwo].filter(Boolean).join(' · ')],
+        ['Важно', casePriorities().join(' · ')],
+        ['Планируемый ВРИ', activeCase.vri],
         ['Участок', activeCase.cadastreNumber || activeCase.plotLocation],
         ['Муниципалитет', activeCase.municipality],
         ['Схема', activeCase.schemeStatus],
@@ -904,18 +918,52 @@ function openCaseEditor() {
 // Это не «рейтинг выдачи земли», а сохранённые критерии для прозрачного подбора.
 function openSearchProfile() {
   clearInput();
+  const overlay = document.createElement('div');
+  overlay.className = 'search-profile-modal';
+  overlay.setAttribute('role', 'presentation');
+  const modal = document.createElement('section');
+  modal.className = 'search-profile-dialog';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'search-profile-title');
   const form = document.createElement('form');
-  form.className = 'case-form search-profile-form';
-  const title = document.createElement('div');
-  title.className = 'case-form-title';
+  form.className = 'search-profile-form';
+  const header = document.createElement('header');
+  header.className = 'search-profile-header';
+  const titleGroup = document.createElement('div');
+  const eyebrow = document.createElement('span');
+  eyebrow.className = 'search-profile-eyebrow';
+  eyebrow.textContent = 'ЛИЧНЫЙ МАРШРУТ';
+  const title = document.createElement('h2');
+  title.id = 'search-profile-title';
   title.textContent = 'Настроить поиск места';
   const hint = document.createElement('p');
-  hint.textContent = 'Штурман сохранит ваши критерии, предложит направления для первой проверки и даст выбрать муниципалитет вручную. Это не обещание предоставления участка.';
-  form.append(title, hint);
+  hint.textContent = 'Выберите готовые варианты — Штурман переведёт их в критерии поиска. Окончательно ВРИ и возможность предоставления всегда проверяются по ПЗЗ и документам администрации.';
+  titleGroup.append(eyebrow, title, hint);
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'search-profile-close';
+  closeButton.setAttribute('aria-label', 'Закрыть анкету');
+  closeButton.textContent = '×';
+  header.append(titleGroup, closeButton);
+  form.appendChild(header);
+  const close = (next) => {
+    document.removeEventListener('keydown', onKeydown);
+    document.body.classList.remove('modal-open');
+    overlay.remove();
+    if (typeof next === 'function') next();
+  };
+  const onKeydown = event => {
+    if (event.key === 'Escape') close(() => getActiveStrategy() ? renderCurrentRouteStep() : showAgentComposer());
+  };
+  closeButton.addEventListener('click', () => close(() => getActiveStrategy() ? renderCurrentRouteStep() : showAgentComposer()));
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) close(() => getActiveStrategy() ? renderCurrentRouteStep() : showAgentComposer());
+  });
 
   const regionWrap = document.createElement('label');
   regionWrap.className = 'case-field'; regionWrap.textContent = 'Регион поиска';
-  const region = document.createElement('select'); region.className = 'tool-select';
+  const region = document.createElement('select'); region.className = 'tool-select'; region.required = true;
   const savedRegion = activeCase.regionCode || REGIONS.find(item => item.name === activeCase.region)?.id || '';
   const emptyRegion = document.createElement('option'); emptyRegion.value = ''; emptyRegion.textContent = 'Выберите регион'; region.appendChild(emptyRegion);
   REGIONS.forEach(item => {
@@ -924,33 +972,136 @@ function openSearchProfile() {
   });
   regionWrap.appendChild(region); form.appendChild(regionWrap);
 
-  const inputField = (label, key, placeholder, options = {}) => {
-    const wrap = document.createElement('label'); wrap.className = 'case-field'; wrap.textContent = label;
-    const input = document.createElement('input'); input.type = options.type || 'text'; input.placeholder = placeholder;
-    input.maxLength = options.maxLength || 180; input.value = activeCase[key] || '';
-    if (options.min) input.min = options.min; if (options.max) input.max = options.max;
-    wrap.appendChild(input); form.appendChild(wrap); return input;
+  const makeSection = (headingText, noteText) => {
+    const block = document.createElement('section');
+    block.className = 'search-profile-section';
+    const heading = document.createElement('h3'); heading.textContent = headingText;
+    const note = document.createElement('p'); note.textContent = noteText;
+    block.append(heading, note); form.appendChild(block);
+    return block;
   };
-  const searchCenter = inputField('Город или точка, от которой считать путь', 'searchCenter', 'Например: Саратов');
-  const radius = inputField('Радиус поиска, км', 'searchRadius', 'Например: 60', { type: 'number', min: 1, max: 300 });
-  const plotSize = inputField('Желаемая площадь', 'plotSize', 'Например: 6–10 соток');
-  const travelTime = inputField('Комфортное время в дороге, минут', 'travelTime', 'Например: 60', { type: 'number', min: 1, max: 360 });
+  const goalSection = makeSection('Для чего нужен участок?', 'Выберите понятную цель. Планируемый ВРИ затем обязательно сверим с ПЗЗ.');
+  const goalGrid = document.createElement('div'); goalGrid.className = 'search-goal-grid';
+  const goalOptions = [
+    { id: 'home', title: 'Дом для жизни', note: 'ИЖС', goal: 'Дом для проживания', vri: 'ИЖС' },
+    { id: 'dacha', title: 'Дача или сад', note: 'Ведение садоводства', goal: 'Дача / сад', vri: 'Ведение садоводства' },
+    { id: 'lph', title: 'Личное хозяйство', note: 'ЛПХ на приусадебном участке', goal: 'Личное подсобное хозяйство', vri: 'ЛПХ на приусадебном участке' },
+    { id: 'garden', title: 'Огород', note: 'Ведение огородничества', goal: 'Огородничество', vri: 'Ведение огородничества' },
+    { id: 'farm', title: 'Сено или выпас', note: 'Сельскохозяйственное использование', goal: 'Сенокошение / выпас', vri: 'Сенокошение или выпас' },
+    { id: 'business', title: 'Дело или сервис', note: 'ВРИ уточним по ПЗЗ', goal: 'Коммерческое использование', vri: 'Уточнить по ПЗЗ' }
+  ];
+  const savedGoalPreset = activeCase.goalPreset
+    || goalOptions.find(item => item.vri === activeCase.vri || item.goal === activeCase.goal)?.id
+    || (/сад|дач/i.test(activeCase.goal || '') ? 'dacha' : (/ИЖС|дом/i.test(activeCase.goal || '') ? 'home' : (/ЛПХ|хозяйств/i.test(activeCase.goal || '') ? 'lph' : '')));
+  const goalInputs = [];
+  goalOptions.forEach(item => {
+    const label = document.createElement('label'); label.className = 'search-goal-card';
+    const input = document.createElement('input');
+    input.type = 'radio'; input.name = 'goal-preset'; input.value = item.id; input.required = true; input.checked = item.id === savedGoalPreset;
+    const name = document.createElement('strong'); name.textContent = item.title;
+    const note = document.createElement('span'); note.textContent = item.note;
+    label.append(input, name, note); goalInputs.push({ input, item, label }); goalGrid.appendChild(label);
+  });
+  const refreshGoalCards = () => goalInputs.forEach(({ input, label }) => label.classList.toggle('is-selected', input.checked));
+  goalInputs.forEach(({ input }) => input.addEventListener('change', refreshGoalCards));
+  refreshGoalCards(); goalSection.appendChild(goalGrid);
 
-  const priorityOptions = ['Электричество с подтверждённой возможностью подключения', 'Близость к городу', 'Круглогодичный подъезд', 'Вода', 'Газ', 'Тишина / природа', 'Минимальные расходы'];
-  const priorityField = (label, current) => {
-    const wrap = document.createElement('label'); wrap.className = 'case-field'; wrap.textContent = label;
-    const select = document.createElement('select'); select.className = 'tool-select';
-    const empty = document.createElement('option'); empty.value = ''; empty.textContent = 'Не выбрано'; select.appendChild(empty);
-    priorityOptions.forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; option.selected = value === current; select.appendChild(option); });
-    wrap.appendChild(select); form.appendChild(wrap); return select;
+  const strategySection = makeSection('Какой путь хотите рассмотреть?', 'Это предварительный выбор из 11 стратегий. Штурман не запустит его без проверки условий.');
+  const strategy = document.createElement('select'); strategy.className = 'tool-select';
+  [
+    ['', 'Пока не знаю — помогите выбрать'],
+    ['1', '1. Сразу в собственность без торгов'],
+    ['2', '2. Аренда без торгов с возможным выкупом'],
+    ['3', '3. Аренда, если уже есть зарегистрированный дом'],
+    ['4', '4. Долгосрочная аренда / выкуп уже арендованного участка'],
+    ['5', '5. Аренда для сенокошения или выпаса'],
+    ['6', '6. Безвозмездное пользование для специалиста в селе'],
+    ['7', '7. Дальневосточный или Арктический гектар'],
+    ['8', '8. Прирезка к своему смежному участку'],
+    ['9', '9. Торги: участок в собственность'],
+    ['10', '10. Торги: участок в аренду'],
+    ['11', '11. Торги по банкротству']
+  ].forEach(([value, text]) => {
+    const option = document.createElement('option'); option.value = value; option.textContent = text;
+    option.selected = value === String(activeCase.strategyPreference || ''); strategy.appendChild(option);
+  });
+  strategySection.appendChild(strategy);
+
+  const locationSection = makeSection('Где искать?', 'Можно указать город и радиус, чтобы Штурман учитывал доступность.');
+  const searchCenterWrap = document.createElement('label'); searchCenterWrap.className = 'case-field'; searchCenterWrap.textContent = 'Город или точка отсчёта';
+  const searchCenter = document.createElement('input'); searchCenter.type = 'text'; searchCenter.value = activeCase.searchCenter || ''; searchCenter.placeholder = 'Например: Саратов'; searchCenter.maxLength = 180;
+  searchCenterWrap.appendChild(searchCenter);
+  const radiusWrap = document.createElement('label'); radiusWrap.className = 'case-field'; radiusWrap.textContent = 'Радиус поиска, км';
+  const radius = document.createElement('input'); radius.type = 'number'; radius.value = activeCase.searchRadius || ''; radius.placeholder = 'Например: 60'; radius.min = '1'; radius.max = '300';
+  radiusWrap.appendChild(radius); locationSection.append(searchCenterWrap, radiusWrap);
+
+  const areaSection = makeSection('Какая площадь подходит?', 'Выберите диапазон до 15 соток или укажите свой.');
+  const sizeGrid = document.createElement('div'); sizeGrid.className = 'search-size-grid';
+  const sizeOptions = ['до 4 соток', '4–6 соток', '6–8 соток', '8–10 соток', '10–12 соток', '12–15 соток'];
+  const sizeInputs = [];
+  sizeOptions.forEach(value => {
+    const label = document.createElement('label'); label.className = 'search-size-chip';
+    const input = document.createElement('input'); input.type = 'radio'; input.name = 'plot-size'; input.value = value; input.checked = activeCase.plotSize === value;
+    const text = document.createElement('span'); text.textContent = value;
+    label.append(input, text); sizeInputs.push({ input, label }); sizeGrid.appendChild(label);
+  });
+  const customSizeWrap = document.createElement('label'); customSizeWrap.className = 'case-field'; customSizeWrap.textContent = 'Другая площадь (необязательно)';
+  const customSize = document.createElement('input'); customSize.type = 'text'; customSize.placeholder = 'Например: 15 соток'; customSize.maxLength = 80;
+  customSize.value = sizeOptions.includes(activeCase.plotSize) ? '' : (activeCase.plotSize || '');
+  const refreshSizeCards = () => sizeInputs.forEach(({ input, label }) => label.classList.toggle('is-selected', input.checked));
+  sizeInputs.forEach(({ input }) => input.addEventListener('change', () => { customSize.value = ''; refreshSizeCards(); }));
+  customSize.addEventListener('input', () => {
+    if (customSize.value.trim()) sizeInputs.forEach(({ input }) => { input.checked = false; });
+    refreshSizeCards();
+  });
+  refreshSizeCards(); customSizeWrap.appendChild(customSize); areaSection.append(sizeGrid, customSizeWrap);
+
+  const prioritySection = makeSection('Что важнее всего?', 'Отметьте галочками всё важное — так не придётся выбирать только два пункта.');
+  const priorityGrid = document.createElement('div'); priorityGrid.className = 'search-priority-grid';
+  const oldPriorities = casePriorities();
+  const priorityItems = [
+    'Электричество с подтверждённой возможностью подключения',
+    'Близость к городу',
+    'Круглогодичный подъезд',
+    'Вода',
+    'Газ',
+    'Тишина / природа',
+    'Минимальные расходы'
+  ];
+  const priorityInputs = [];
+  priorityItems.forEach(value => {
+    const label = document.createElement('label'); label.className = 'search-priority-item';
+    const input = document.createElement('input'); input.type = 'checkbox'; input.value = value;
+    input.checked = oldPriorities.includes(value) || (value === 'Круглогодичный подъезд' && Boolean(activeCase.allSeasonRoad));
+    const text = document.createElement('span'); text.textContent = value;
+    label.append(input, text); priorityInputs.push(input); priorityGrid.appendChild(label);
+  });
+  prioritySection.appendChild(priorityGrid);
+  const timePriority = document.createElement('div'); timePriority.className = 'search-time-priority';
+  const timeCheckLabel = document.createElement('label'); timeCheckLabel.className = 'search-priority-item';
+  const travelTimePriority = document.createElement('input'); travelTimePriority.type = 'checkbox'; travelTimePriority.checked = Boolean(activeCase.travelTimePriority || activeCase.travelTime);
+  const timeText = document.createElement('span'); timeText.textContent = 'Предел времени в дороге';
+  timeCheckLabel.append(travelTimePriority, timeText);
+  const timeOptions = document.createElement('div'); timeOptions.className = 'search-time-options';
+  const savedTravelTime = String(activeCase.travelTime || '60');
+  const timeInputs = [];
+  ['30', '45', '60', '90', '120'].forEach(value => {
+    const label = document.createElement('label');
+    const input = document.createElement('input'); input.type = 'radio'; input.name = 'travel-time'; input.value = value; input.checked = value === savedTravelTime;
+    const text = document.createElement('span'); text.textContent = 'до ' + value + ' мин';
+    label.append(input, text); timeInputs.push(input); timeOptions.appendChild(label);
+  });
+  const updateTimeOptions = () => {
+    timeOptions.classList.toggle('is-disabled', !travelTimePriority.checked);
+    timeInputs.forEach(input => { input.disabled = !travelTimePriority.checked; });
   };
-  const priorityOne = priorityField('Главный приоритет', activeCase.priorityOne);
-  const priorityTwo = priorityField('Второй приоритет', activeCase.priorityTwo);
+  travelTimePriority.addEventListener('change', updateTimeOptions); updateTimeOptions();
+  timePriority.append(timeCheckLabel, timeOptions); prioritySection.appendChild(timePriority);
 
-  const roadWrap = document.createElement('label'); roadWrap.className = 'tool-check';
-  const allSeasonRoad = document.createElement('input'); allSeasonRoad.type = 'checkbox'; allSeasonRoad.checked = Boolean(activeCase.allSeasonRoad);
-  const roadText = document.createElement('span'); roadText.textContent = 'Нужен круглогодичный подъезд'; roadWrap.append(allSeasonRoad, roadText); form.appendChild(roadWrap);
-  const futurePlan = inputField('План на будущее', 'futurePlan', 'Например: арендовать, освоить и при подходящих условиях рассмотреть выкуп');
+  const futureWrap = document.createElement('label'); futureWrap.className = 'case-field'; futureWrap.textContent = 'План на будущее (необязательно)';
+  const futurePlan = document.createElement('input'); futurePlan.type = 'text'; futurePlan.value = activeCase.futurePlan || ''; futurePlan.maxLength = 180;
+  futurePlan.placeholder = 'Например: арендовать, построить дом и затем рассмотреть выкуп';
+  futureWrap.appendChild(futurePlan); form.appendChild(futureWrap);
 
   const directoryBox = document.createElement('section'); directoryBox.className = 'municipality-picker';
   const directoryTitle = document.createElement('h3'); directoryTitle.textContent = 'Муниципалитет и администрация';
@@ -1006,26 +1157,45 @@ function openSearchProfile() {
   actions.append(save, cancel); form.appendChild(actions);
   form.addEventListener('submit', event => {
     event.preventDefault();
+    const selectedGoal = goalInputs.find(({ input }) => input.checked);
+    if (!selectedGoal) {
+      goalInputs[0].input.focus();
+      goalSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     const selectedRegion = findRegion(region.value);
     const chosenMunicipality = manualMunicipality.value.trim() || municipality.value || activeCase.municipality;
     const url = authorityUrl.value.trim();
     if (url && !safeExternalUrl(url)) { authorityUrl.focus(); return; }
+    const selectedSize = sizeInputs.find(({ input }) => input.checked)?.input.value || '';
+    const selectedPriorities = priorityInputs.filter(input => input.checked).map(input => input.value);
+    const selectedTravelTime = timeInputs.find(input => input.checked)?.value || '';
+    if (travelTimePriority.checked && selectedTravelTime) selectedPriorities.push('Время в дороге: до ' + selectedTravelTime + ' минут');
     saveCase({
       ...activeCase,
       regionCode: region.value,
       region: selectedRegion?.name || activeCase.region,
-      searchCenter: searchCenter.value.trim(), searchRadius: radius.value.trim(), plotSize: plotSize.value.trim(),
-      priorityOne: priorityOne.value, priorityTwo: priorityTwo.value, travelTime: travelTime.value.trim(),
-      allSeasonRoad: allSeasonRoad.checked, futurePlan: futurePlan.value.trim(),
+      goalPreset: selectedGoal.item.id, goal: selectedGoal.item.goal, vri: selectedGoal.item.vri,
+      strategyPreference: strategy.value,
+      searchCenter: searchCenter.value.trim(), searchRadius: radius.value.trim(),
+      plotSize: customSize.value.trim() || selectedSize,
+      priorities: selectedPriorities, priorityOne: selectedPriorities[0] || '', priorityTwo: selectedPriorities[1] || '',
+      travelTime: travelTimePriority.checked ? selectedTravelTime : '',
+      travelTimePriority: travelTimePriority.checked,
+      allSeasonRoad: selectedPriorities.includes('Круглогодичный подъезд'), futurePlan: futurePlan.value.trim(),
       municipality: chosenMunicipality, authorityName: authorityName.value.trim(), authorityUrl: url
     });
-    clearInput();
+    close();
     agentTextMessage('Критерии поиска сохранены. Выбранный муниципалитет — направление для проверки, а не обещание предоставления земли.')
       .then(renderCaseCard)
       .then(() => getActiveStrategy() ? renderCurrentRouteStep() : showAgentComposer());
   });
-  cancel.addEventListener('click', () => getActiveStrategy() ? renderCurrentRouteStep() : showAgentComposer());
-  inputArea.appendChild(form);
+  cancel.addEventListener('click', () => close(() => getActiveStrategy() ? renderCurrentRouteStep() : showAgentComposer()));
+  modal.appendChild(form);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  document.body.classList.add('modal-open');
+  document.addEventListener('keydown', onKeydown);
   region.focus();
 }
 
