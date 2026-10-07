@@ -43,9 +43,9 @@
         ближайший шаг и покажет, что проверить до заявления или торгов.
       </p>
 
-      <button class="landing-cta" id="landing-start">Начать разговор со Штурманом</button>
-      <p class="landing-hint">Можно написать вопрос, кадастровый номер или описать ситуацию. Короткое интервью останется запасным вариантом.</p>
-      <p class="landing-free">Сейчас бесплатно — без регистрации и оплаты</p>
+      <button class="landing-cta" id="landing-start">Открыть личный кабинет</button>
+      <p class="landing-hint">Сначала создайте земельное дело и сохраните параметры поиска. ЗемляБот подключится, когда появится конкретный вопрос.</p>
+      <p class="landing-free">Данные хранятся только на этом устройстве</p>
 
       <a class="landing-secondary-link" href="strategies.html">Посмотреть все 11 стратегий списком</a>
 
@@ -104,6 +104,65 @@
     </div>
   </div>
 
+  <!-- Личный кабинет: здесь ведётся дело, а не переписка -->
+  <section class="dashboard" id="dashboard" aria-label="Личный кабинет Земельного Штурмана">
+    <div class="dashboard-shell">
+      <header class="dashboard-header">
+        <a class="dashboard-brand" href="#" id="dashboard-home-link" aria-label="На главную личного кабинета">
+          <span class="dashboard-brand-mark" aria-hidden="true">⌁</span>
+          <span><strong>Земельный Штурман</strong><small>Личный кабинет</small></span>
+        </a>
+        <nav class="dashboard-nav" aria-label="Разделы кабинета">
+          <button type="button" class="dashboard-nav-btn is-active" data-dashboard-page="home">Обзор</button>
+          <button type="button" class="dashboard-nav-btn" data-dashboard-page="cases">Мои дела</button>
+          <button type="button" class="dashboard-nav-btn" data-dashboard-page="auctions">Торги</button>
+        </nav>
+        <button class="open-bot-btn" type="button" id="open-land-bot">ЗемляБот</button>
+      </header>
+
+      <main class="dashboard-main">
+        <section class="cabinet-home" id="cabinet-home">
+          <div class="cabinet-hero">
+            <div>
+              <span class="cabinet-kicker">ВАШЕ ПРОСТРАНСТВО ДЛЯ ЗЕМЕЛЬНЫХ ДЕЛ</span>
+              <h2>Не чат. Ваш маршрут к участку.</h2>
+              <p>Здесь вы создаёте дело, выбираете направление и храните результаты проверок. ЗемляБот нужен только для разбора вопросов, документов и сложных ситуаций.</p>
+            </div>
+            <button class="cabinet-primary-btn" type="button" id="dashboard-new-case">Создать земельное дело</button>
+          </div>
+
+          <div class="cabinet-overview-grid">
+            <article class="cabinet-overview-card cabinet-current-case" id="cabinet-current-case"></article>
+            <article class="cabinet-overview-card">
+              <span class="cabinet-card-label">КАК ЭТО РАБОТАЕТ</span>
+              <ol class="cabinet-flow">
+                <li><b>01</b><span>Создайте дело и задайте критерии поиска</span></li>
+                <li><b>02</b><span>Проверьте участок, ПЗЗ и администрацию</span></li>
+                <li><b>03</b><span>Подключайте ЗемляБот для конкретных вопросов</span></li>
+              </ol>
+            </article>
+          </div>
+
+          <section class="cabinet-actions">
+            <button type="button" class="cabinet-action-card" id="dashboard-open-cases"><span>◫</span><strong>Мои земельные дела</strong><small>Вернуться к сохранённому делу</small></button>
+            <button type="button" class="cabinet-action-card" id="dashboard-open-auctions"><span>⌘</span><strong>Торги</strong><small>Список лотов и личный предел ставки</small></button>
+            <button type="button" class="cabinet-action-card" id="dashboard-open-bot"><span>✦</span><strong>Спросить ЗемляБота</strong><small>Вопросы, документы, отказы и проверки</small></button>
+          </section>
+        </section>
+
+        <section class="case-workspace" id="case-workspace" hidden>
+          <div class="case-workspace-top">
+            <button type="button" class="back-to-cabinet" id="back-to-cabinet">← Личный кабинет</button>
+            <span>НОВОЕ ЗЕМЕЛЬНОЕ ДЕЛО</span>
+          </div>
+          <div id="case-setup-content"></div>
+        </section>
+
+        <section class="cabinet-list-screen" id="cabinet-list-screen" hidden></section>
+      </main>
+    </div>
+  </section>
+
   <div class="app">
 
     <!-- Шапка -->
@@ -123,6 +182,7 @@
         </div>
       </div>
       <button class="header-portfolio-btn" id="portfolio-button" type="button">Мои участки</button>
+      <button class="header-back-btn" id="bot-back" type="button">← Кабинет</button>
       <div class="progress-wrap" id="progress-wrap" style="display:none">
         <span id="progress-label">Вопрос 1 из 5</span>
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
