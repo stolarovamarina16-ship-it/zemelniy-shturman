@@ -382,7 +382,49 @@ body {
 
 /* Профиль поиска — не прогноз «где дадут землю», а спокойное место для
    ограничений пользователя и прозрачного ручного выбора муниципалитета. */
-.search-profile-form { max-width: 520px; }
+.modal-open { overflow: hidden; }
+.search-profile-modal { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; overflow-y: auto; background: rgba(15,26,18,.62); backdrop-filter: blur(5px); animation: searchModalIn .18s ease-out both; }
+.search-profile-dialog { width: min(100%, 760px); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid rgba(232,163,61,.42); border-radius: 20px; background: #fffdf7; box-shadow: 0 24px 80px rgba(12,24,15,.34); }
+.search-profile-form { display: grid; gap: 16px; padding: 22px; }
+.search-profile-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 15px; border-bottom: 1px solid rgba(92,138,90,.24); }
+.search-profile-eyebrow { display: block; margin-bottom: 5px; color: var(--ochre); font-size: 10px; font-weight: 900; letter-spacing: .14em; }
+.search-profile-header h2 { margin: 0; color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: clamp(23px, 4vw, 30px); line-height: 1.08; }
+.search-profile-header p { max-width: 590px; margin: 8px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.search-profile-close { flex: 0 0 auto; width: 34px; height: 34px; border: 1px solid rgba(92,138,90,.32); border-radius: 50%; background: var(--white); color: var(--forest-900); font: 400 26px/29px Georgia, serif; cursor: pointer; }
+.search-profile-close:hover { border-color: var(--ochre); color: var(--ochre); }
+.search-profile-section { display: grid; gap: 9px; padding: 13px; border: 1px solid rgba(92,138,90,.24); border-radius: 12px; background: rgba(237,244,233,.42); }
+.search-profile-section h3 { margin: 0; color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 17px; line-height: 1.2; }
+.search-profile-section > p { margin: 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.45; }
+.search-goal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.search-goal-card { position: relative; display: grid; gap: 4px; min-height: 85px; padding: 11px; border: 1px solid rgba(33,28,19,.12); border-radius: 10px; background: rgba(255,255,255,.84); color: var(--forest-900); cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+.search-goal-card input { position: absolute; opacity: 0; pointer-events: none; }
+.search-goal-card strong { font-size: 12px; line-height: 1.25; }
+.search-goal-card span { color: var(--text-muted); font-size: 10.5px; line-height: 1.35; }
+.search-goal-card:hover, .search-goal-card.is-selected { border-color: var(--moss); background: var(--moss-pale); transform: translateY(-1px); }
+.search-goal-card.is-selected::after { position: absolute; top: 8px; right: 9px; content: '✓'; color: var(--forest-800); font-weight: 900; }
+.search-goal-card:has(input:focus-visible), .search-size-chip:has(input:focus-visible), .search-priority-item:has(input:focus-visible) { outline: 3px solid rgba(92,138,90,.2); outline-offset: 2px; }
+.search-size-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.search-size-chip { position: relative; display: grid; place-items: center; min-height: 39px; border: 1px solid rgba(33,28,19,.13); border-radius: 8px; background: var(--white); color: var(--forest-900); font-size: 11px; font-weight: 800; cursor: pointer; }
+.search-size-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.search-size-chip.is-selected { border-color: var(--moss); background: var(--moss-pale); }
+.search-priority-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.search-priority-item { display: flex; align-items: flex-start; gap: 7px; padding: 9px; border: 1px solid rgba(33,28,19,.1); border-radius: 8px; background: rgba(255,255,255,.72); color: var(--forest-900); font-size: 11px; font-weight: 700; line-height: 1.3; cursor: pointer; }
+.search-priority-item input { flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--moss); }
+.search-time-priority { display: grid; gap: 7px; }
+.search-time-options { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 4px; }
+.search-time-options label { position: relative; cursor: pointer; }
+.search-time-options input { position: absolute; opacity: 0; pointer-events: none; }
+.search-time-options span { display: block; border: 1px solid rgba(92,138,90,.34); border-radius: 999px; padding: 6px 8px; background: var(--white); color: var(--forest-900); font-size: 10.5px; font-weight: 800; }
+.search-time-options input:checked + span { border-color: var(--moss); background: var(--moss-pale); }
+.search-time-options.is-disabled { opacity: .42; pointer-events: none; }
+@keyframes searchModalIn { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 580px) {
+  .search-profile-modal { padding: 8px; place-items: end center; }
+  .search-profile-dialog { max-height: calc(100vh - 16px); border-radius: 18px 18px 12px 12px; }
+  .search-profile-form { gap: 13px; padding: 16px; }
+  .search-goal-grid, .search-priority-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .search-size-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .municipality-picker { display: grid; gap: 9px; padding: 13px; border: 1px solid rgba(92,138,90,.35); border-radius: 10px; background: rgba(237,244,233,.55); }
 .municipality-picker h3 { margin: 0; color: var(--forest-950); font-family: 'Fraunces', Georgia, serif; font-size: 17px; line-height: 1.25; }
 .municipality-picker > p { margin: 0; color: var(--text-muted); font-size: 11.5px; line-height: 1.45; }
