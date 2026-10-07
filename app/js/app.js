@@ -617,7 +617,10 @@ function emptyCase() {
     goal: '', region: '', currentStep: '', nextDate: '', updatedAt: '',
     strategyId: '', routeStep: 0, routeStartedAt: '',
     cadastreNumber: '', plotLocation: '', municipality: '', authorityUrl: '',
-    regulationUrl: '', pzzUrl: '', schemeStatus: '', submissionChecks: {}
+    regulationUrl: '', pzzUrl: '', schemeStatus: '', submissionChecks: {},
+    regionCode: '', searchCenter: '', searchRadius: '', plotSize: '',
+    priorityOne: '', priorityTwo: '', travelTime: '', allSeasonRoad: false,
+    futurePlan: '', authorityName: ''
   };
 }
 
@@ -626,7 +629,7 @@ function createLocalId(prefix) {
 }
 
 function isMeaningfulCase(item) {
-  return Boolean(item && (item.goal || item.region || item.currentStep || item.nextDate || item.strategyId || item.cadastreNumber || item.plotLocation || item.municipality));
+  return Boolean(item && (item.goal || item.region || item.currentStep || item.nextDate || item.strategyId || item.cadastreNumber || item.plotLocation || item.municipality || item.searchCenter));
 }
 
 function loadLegacyCase() {
@@ -711,7 +714,7 @@ function caseStatus(item) {
 }
 
 function hasCase() {
-  return Boolean(activeCase.goal || activeCase.region || activeCase.currentStep || activeCase.nextDate || activeCase.strategyId || activeCase.cadastreNumber || activeCase.plotLocation || activeCase.municipality);
+  return Boolean(activeCase.goal || activeCase.region || activeCase.currentStep || activeCase.nextDate || activeCase.strategyId || activeCase.cadastreNumber || activeCase.plotLocation || activeCase.municipality || activeCase.searchCenter);
 }
 
 function caseContext() {
@@ -719,7 +722,15 @@ function caseContext() {
   return [
     activeCase.goal && `Цель: ${activeCase.goal}`,
     activeCase.region && `Регион: ${activeCase.region}`,
+    activeCase.searchCenter && `Центр поиска: ${activeCase.searchCenter}`,
+    activeCase.searchRadius && `Радиус поиска: до ${activeCase.searchRadius} км`,
+    activeCase.plotSize && `Площадь: ${activeCase.plotSize}`,
+    [activeCase.priorityOne, activeCase.priorityTwo].filter(Boolean).length && `Приоритеты: ${[activeCase.priorityOne, activeCase.priorityTwo].filter(Boolean).join('; ')}`,
+    activeCase.travelTime && `Дорога: до ${activeCase.travelTime} минут`,
+    activeCase.allSeasonRoad && 'Нужен круглогодичный подъезд',
+    activeCase.futurePlan && `Перспектива: ${activeCase.futurePlan}`,
     activeCase.municipality && `Муниципалитет: ${activeCase.municipality}`,
+    activeCase.authorityName && `Орган: ${activeCase.authorityName}`,
     activeCase.cadastreNumber && `Кадастровый номер: ${activeCase.cadastreNumber}`,
     activeCase.plotLocation && `Местоположение участка: ${activeCase.plotLocation}`,
     activeCase.schemeStatus && `Статус схемы: ${activeCase.schemeStatus}`,
@@ -759,6 +770,9 @@ function renderCaseCard() {
       [
         ['Цель', activeCase.goal],
         ['Регион', activeCase.region],
+        ['Поиск', [activeCase.searchCenter, activeCase.searchRadius && `до ${activeCase.searchRadius} км`].filter(Boolean).join(' · ')],
+        ['Площадь', activeCase.plotSize],
+        ['Важно', [activeCase.priorityOne, activeCase.priorityTwo].filter(Boolean).join(' · ')],
         ['Участок', activeCase.cadastreNumber || activeCase.plotLocation],
         ['Муниципалитет', activeCase.municipality],
         ['Схема', activeCase.schemeStatus],
@@ -798,6 +812,11 @@ function renderCaseCard() {
     edit.textContent = hasCase() ? 'Обновить дело' : 'Создать дело';
     edit.addEventListener('click', openCaseEditor);
     card.appendChild(edit);
+    const searchProfile = document.createElement('button');
+    searchProfile.className = 'case-edit-btn case-search-profile-btn';
+    searchProfile.textContent = 'Настроить поиск места';
+    searchProfile.addEventListener('click', openSearchProfile);
+    card.appendChild(searchProfile);
     const passport = document.createElement('button');
     passport.className = 'case-edit-btn case-passport-btn';
     passport.textContent = activeCase.cadastreNumber || activeCase.plotLocation ? 'Открыть паспорт участка' : 'Создать паспорт участка';
@@ -878,6 +897,136 @@ function openCaseEditor() {
   cancel.addEventListener('click', showAgentComposer);
   inputArea.appendChild(form);
   inputs.goal.focus();
+}
+
+// Профиль поиска отделён от паспорта конкретного участка: сначала человек
+// выбирает направление и ограничения, а уже потом проверяет отдельный контур.
+// Это не «рейтинг выдачи земли», а сохранённые критерии для прозрачного подбора.
+function openSearchProfile() {
+  clearInput();
+  const form = document.createElement('form');
+  form.className = 'case-form search-profile-form';
+  const title = document.createElement('div');
+  title.className = 'case-form-title';
+  title.textContent = 'Настроить поиск места';
+  const hint = document.createElement('p');
+  hint.textContent = 'Штурман сохранит ваши критерии, предложит направления для первой проверки и даст выбрать муниципалитет вручную. Это не обещание предоставления участка.';
+  form.append(title, hint);
+
+  const regionWrap = document.createElement('label');
+  regionWrap.className = 'case-field'; regionWrap.textContent = 'Регион поиска';
+  const region = document.createElement('select'); region.className = 'tool-select';
+  const savedRegion = activeCase.regionCode || REGIONS.find(item => item.name === activeCase.region)?.id || '';
+  const emptyRegion = document.createElement('option'); emptyRegion.value = ''; emptyRegion.textContent = 'Выберите регион'; region.appendChild(emptyRegion);
+  REGIONS.forEach(item => {
+    const option = document.createElement('option'); option.value = item.id; option.textContent = item.name;
+    option.selected = item.id === savedRegion; region.appendChild(option);
+  });
+  regionWrap.appendChild(region); form.appendChild(regionWrap);
+
+  const inputField = (label, key, placeholder, options = {}) => {
+    const wrap = document.createElement('label'); wrap.className = 'case-field'; wrap.textContent = label;
+    const input = document.createElement('input'); input.type = options.type || 'text'; input.placeholder = placeholder;
+    input.maxLength = options.maxLength || 180; input.value = activeCase[key] || '';
+    if (options.min) input.min = options.min; if (options.max) input.max = options.max;
+    wrap.appendChild(input); form.appendChild(wrap); return input;
+  };
+  const searchCenter = inputField('Город или точка, от которой считать путь', 'searchCenter', 'Например: Саратов');
+  const radius = inputField('Радиус поиска, км', 'searchRadius', 'Например: 60', { type: 'number', min: 1, max: 300 });
+  const plotSize = inputField('Желаемая площадь', 'plotSize', 'Например: 6–10 соток');
+  const travelTime = inputField('Комфортное время в дороге, минут', 'travelTime', 'Например: 60', { type: 'number', min: 1, max: 360 });
+
+  const priorityOptions = ['Электричество с подтверждённой возможностью подключения', 'Близость к городу', 'Круглогодичный подъезд', 'Вода', 'Газ', 'Тишина / природа', 'Минимальные расходы'];
+  const priorityField = (label, current) => {
+    const wrap = document.createElement('label'); wrap.className = 'case-field'; wrap.textContent = label;
+    const select = document.createElement('select'); select.className = 'tool-select';
+    const empty = document.createElement('option'); empty.value = ''; empty.textContent = 'Не выбрано'; select.appendChild(empty);
+    priorityOptions.forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = value; option.selected = value === current; select.appendChild(option); });
+    wrap.appendChild(select); form.appendChild(wrap); return select;
+  };
+  const priorityOne = priorityField('Главный приоритет', activeCase.priorityOne);
+  const priorityTwo = priorityField('Второй приоритет', activeCase.priorityTwo);
+
+  const roadWrap = document.createElement('label'); roadWrap.className = 'tool-check';
+  const allSeasonRoad = document.createElement('input'); allSeasonRoad.type = 'checkbox'; allSeasonRoad.checked = Boolean(activeCase.allSeasonRoad);
+  const roadText = document.createElement('span'); roadText.textContent = 'Нужен круглогодичный подъезд'; roadWrap.append(allSeasonRoad, roadText); form.appendChild(roadWrap);
+  const futurePlan = inputField('План на будущее', 'futurePlan', 'Например: арендовать, освоить и при подходящих условиях рассмотреть выкуп');
+
+  const directoryBox = document.createElement('section'); directoryBox.className = 'municipality-picker';
+  const directoryTitle = document.createElement('h3'); directoryTitle.textContent = 'Муниципалитет и администрация';
+  const directoryLead = document.createElement('p'); directoryLead.textContent = 'Можно выбрать направление из списка или указать своё. Список помогает начать проверку, но не показывает «где точно выдадут землю».';
+  const sourceNote = document.createElement('a'); sourceNote.className = 'municipality-source'; sourceNote.target = '_blank'; sourceNote.rel = 'noopener noreferrer';
+  const suggestions = document.createElement('div'); suggestions.className = 'municipality-suggestions';
+  const municipalityWrap = document.createElement('label'); municipalityWrap.className = 'case-field'; municipalityWrap.textContent = 'Выбрать муниципалитет из списка';
+  const municipality = document.createElement('select'); municipality.className = 'tool-select'; municipalityWrap.appendChild(municipality);
+  const manualMunicipality = document.createElement('input'); manualMunicipality.type = 'text'; manualMunicipality.className = 'tool-input'; manualMunicipality.placeholder = 'Или впишите другой муниципалитет вручную'; manualMunicipality.maxLength = 180;
+  const authorityName = document.createElement('input'); authorityName.type = 'text'; authorityName.className = 'tool-input'; authorityName.placeholder = 'Орган или администрация'; authorityName.maxLength = 220; authorityName.value = activeCase.authorityName || '';
+  const authorityUrl = document.createElement('input'); authorityUrl.type = 'url'; authorityUrl.className = 'tool-input'; authorityUrl.placeholder = 'Официальный сайт администрации: https://…'; authorityUrl.maxLength = 500; authorityUrl.value = activeCase.authorityUrl || '';
+  directoryBox.append(directoryTitle, directoryLead, sourceNote, suggestions, municipalityWrap, manualMunicipality, authorityName, authorityUrl);
+  form.appendChild(directoryBox);
+
+  const renderDirectory = () => {
+    const directory = MUNICIPALITY_DIRECTORY[region.value];
+    municipality.innerHTML = '';
+    const empty = document.createElement('option'); empty.value = ''; empty.textContent = directory ? 'Выберите из списка' : 'Для региона пока нет справочника — впишите вручную'; municipality.appendChild(empty);
+    suggestions.innerHTML = '';
+    sourceNote.textContent = '';
+    sourceNote.removeAttribute('href');
+    if (!directory) return;
+    sourceNote.href = directory.sourceUrl;
+    sourceNote.textContent = `${directory.sourceLabel} · проверено ${directory.updatedAt}`;
+    directory.entries.forEach(entry => {
+      const option = document.createElement('option'); option.value = entry.name; option.textContent = entry.name;
+      option.selected = entry.name === activeCase.municipality; municipality.appendChild(option);
+    });
+    directory.entries.slice(0, 3).forEach(entry => {
+      const card = document.createElement('article'); card.className = 'municipality-suggestion';
+      const name = document.createElement('strong'); name.textContent = entry.name;
+      const note = document.createElement('span'); note.textContent = entry.note;
+      const choose = document.createElement('button'); choose.type = 'button'; choose.textContent = 'Выбрать';
+      choose.addEventListener('click', () => {
+        municipality.value = entry.name; manualMunicipality.value = '';
+        authorityName.value = entry.authority; authorityUrl.value = entry.authorityUrl;
+      });
+      card.append(name, note, choose); suggestions.appendChild(card);
+    });
+  };
+  const applyMunicipality = () => {
+    const entry = MUNICIPALITY_DIRECTORY[region.value]?.entries.find(item => item.name === municipality.value);
+    if (!entry) return;
+    manualMunicipality.value = ''; authorityName.value = entry.authority; authorityUrl.value = entry.authorityUrl;
+  };
+  region.addEventListener('change', renderDirectory);
+  municipality.addEventListener('change', applyMunicipality);
+  renderDirectory();
+
+  const actions = document.createElement('div'); actions.className = 'case-form-actions';
+  const save = document.createElement('button'); save.type = 'submit'; save.className = 'send-btn'; save.textContent = 'Сохранить критерии';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'case-cancel-btn'; cancel.textContent = 'Отмена';
+  actions.append(save, cancel); form.appendChild(actions);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const selectedRegion = findRegion(region.value);
+    const chosenMunicipality = manualMunicipality.value.trim() || municipality.value || activeCase.municipality;
+    const url = authorityUrl.value.trim();
+    if (url && !safeExternalUrl(url)) { authorityUrl.focus(); return; }
+    saveCase({
+      ...activeCase,
+      regionCode: region.value,
+      region: selectedRegion?.name || activeCase.region,
+      searchCenter: searchCenter.value.trim(), searchRadius: radius.value.trim(), plotSize: plotSize.value.trim(),
+      priorityOne: priorityOne.value, priorityTwo: priorityTwo.value, travelTime: travelTime.value.trim(),
+      allSeasonRoad: allSeasonRoad.checked, futurePlan: futurePlan.value.trim(),
+      municipality: chosenMunicipality, authorityName: authorityName.value.trim(), authorityUrl: url
+    });
+    clearInput();
+    agentTextMessage('Критерии поиска сохранены. Выбранный муниципалитет — направление для проверки, а не обещание предоставления земли.')
+      .then(renderCaseCard)
+      .then(() => getActiveStrategy() ? renderCurrentRouteStep() : showAgentComposer());
+  });
+  cancel.addEventListener('click', () => getActiveStrategy() ? renderCurrentRouteStep() : showAgentComposer());
+  inputArea.appendChild(form);
+  region.focus();
 }
 
 // Самый полезный следующий слой после маршрута: не большая база данных, а
@@ -1250,6 +1399,7 @@ function showAgentComposer() {
       ['Мои участки', 'portfolio'],
       ['Торги', 'auctions'],
       ['Продолжить моё дело', 'continue'],
+      ['Настроить поиск места', 'search-profile'],
       ['Паспорт участка', 'plot-passport'],
       ['Готовность к подаче', 'submission-readiness'],
       ['Подать в администрацию', 'municipality'],
@@ -1262,6 +1412,7 @@ function showAgentComposer() {
       ['Мои участки', 'portfolio'],
       ['Торги', 'auctions'],
       ['Начать путь к участку', 'start-route'],
+      ['Настроить поиск места', 'search-profile'],
       ['Паспорт участка', 'plot-passport'],
       ['Готовность к подаче', 'submission-readiness'],
       ['Подать в администрацию', 'municipality'],
@@ -1281,6 +1432,7 @@ function showAgentComposer() {
       if (action === 'scheme-guide') return openSchemeGuide();
       if (action === 'live-check') return openLiveCheckDesk();
       if (action === 'plot-passport') return openPlotPassport();
+      if (action === 'search-profile') return openSearchProfile();
       if (action === 'submission-readiness') return openSubmissionReadiness();
       if (action === 'municipality') return openMunicipalityDesk();
       if (action === 'document') return openDocumentAnalyzer();
@@ -1713,6 +1865,7 @@ function showResult(strategies) {
   saveRoute(primary, 0, {
     goal: answers.goal || activeCase.goal,
     region: regionName,
+    regionCode: answers.region_ru || activeCase.regionCode || '',
     nextDate: activeCase.nextDate || ''
   });
 
@@ -1721,8 +1874,8 @@ function showResult(strategies) {
     .then(() => strategies.length > 1
       ? agentMessage(`<span class="agent-base-note">Есть ещё один запасной вариант: «${strategies[1].title}». Вернёмся к нему, только если основной путь не подойдёт.</span>`)
       : Promise.resolve())
-    .then(renderCaseCard)
-    .then(renderCurrentRouteStep);
+    .then(() => agentMessage('Перед первым поиском настроим место: радиус, площадь, приоритеты и муниципалитет. Это поможет не начинать с карты вслепую.'))
+    .then(openSearchProfile);
 }
 
 function showFinalActions() {
