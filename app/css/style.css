@@ -1071,6 +1071,7 @@ body {
 }
 
 .official-links a:hover { background: var(--ochre-light); color: var(--forest-950); }
+.strategy-official-links { margin: 14px 0 0; }
 
 .bid-calculator {
   padding: 16px;

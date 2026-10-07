@@ -69,14 +69,36 @@ function agentMessage(html, delay = 0) {
 }
 
 function agentTextMessage(text, delay = 0) {
-  const safeHtml = String(text)
+  const safeHtml = linkifyExternalUrls(text);
+  return agentMessage(safeHtml, delay);
+}
+
+function escapeHtml(value) {
+  return String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-    .replace(/\n/g, '<br>');
-  return agentMessage(safeHtml, delay);
+    .replace(/'/g, '&#039;');
+}
+
+function externalLink(url, label = url) {
+  const safeUrl = safeExternalUrl(url);
+  if (!safeUrl) return escapeHtml(label);
+  return `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+}
+
+// Ответы ЗемляБота приходят простым текстом. Если в них есть ссылка, она должна
+// вести сразу на сайт, а не заставлять человека копировать адрес вручную.
+function linkifyExternalUrls(text) {
+  const escaped = escapeHtml(text).replace(/\n/g, '<br>');
+  return escaped.replace(/https:\/\/[^\s<]+/g, rawUrl => {
+    const match = rawUrl.match(/^(.*?)([),.;:!?]+)?$/);
+    const visibleUrl = match?.[1] || rawUrl;
+    const trailing = match?.[2] || '';
+    const url = visibleUrl.replace(/&amp;/g, '&');
+    return externalLink(url, url) + trailing;
+  });
 }
 
 // Добавить сообщение пользователя
@@ -338,6 +360,24 @@ function safeExternalUrl(value) {
   } catch (e) { return ''; }
 }
 
+const OFFICIAL_SERVICES = [
+  { test: /НСПД|nspd\.gov\.ru/i, label: 'Открыть НСПД', url: 'https://nspd.gov.ru' },
+  { test: /ПЗЗ|Генплан|ЗОУИТ|ФГИС ТП/i, label: 'Открыть ФГИС ТП', url: 'https://fgistp.economy.gov.ru' },
+  { test: /ГИС Торги|\bторг(?:и|ов|ах|ами)?\b|torgi\.gov\.ru/i, label: 'Открыть ГИС Торги', url: 'https://torgi.gov.ru' },
+  { test: /Росреестр|ЕГРН/i, label: 'Открыть Росреестр', url: 'https://rosreestr.gov.ru' },
+  { test: /Госуслуг/i, label: 'Открыть Госуслуги', url: 'https://www.gosuslugi.ru' },
+  { test: /Дальневосточн|Арктическ.*гектар|надальнийвосток\.рф|стопарктика\.рф/i, label: 'Открыть программу «Гектар»', url: 'https://надальнийвосток.рф' },
+  { test: /Федресурс|ЕФРСБ|банкротств/i, label: 'Открыть ЕФРСБ / Федресурс', url: 'https://bankrot.fedresurs.ru' },
+  { test: /Сбербанк-АСТ/i, label: 'Открыть Сбербанк-АСТ', url: 'https://www.sberbank-ast.ru' }
+];
+
+function officialLinksFor(text, className = 'service-link-row') {
+  const links = OFFICIAL_SERVICES
+    .filter(service => service.test.test(String(text || '')))
+    .map(service => externalLink(service.url, service.label));
+  return links.length ? `<div class="${className}" aria-label="Официальные сервисы">${links.join('')}</div>` : '';
+}
+
 // ===== НАПОМИНАНИЯ =====
 
 function loadReminders() {
@@ -504,8 +544,8 @@ function openLiveCheckDesk() {
     fetch(`/api/cadastre?number=${encodeURIComponent(value)}`).then(r => r.json().then(data => ({ ok:r.ok, data }))).then(({ ok, data }) => {
       clearInput();
       const cost = ok && data.cadCost ? `Кадастровая стоимость: ${formatMoney(data.cadCost)}.` : 'Кадастровую стоимость автоматически получить не удалось — её можно посмотреть на НСПД или в выписке.';
-      return agentTextMessage(`${cost}\n\nДальше откройте НСПД и проверьте границы, ВРИ и ЗОУИТ; затем ГИС Торги — публикации и протоколы; перед решением закажите актуальную выписку ЕГРН. Кадастровый номер: ${value}.`);
-    }).catch(() => agentTextMessage('Не получилось обратиться к реестру. Откройте НСПД вручную и вставьте кадастровый номер.')).finally(showAgentComposer);
+      return agentTextMessage(`${cost}\n\nДальше откройте НСПД: https://nspd.gov.ru — проверьте границы, ВРИ и ЗОУИТ; затем ГИС Торги: https://torgi.gov.ru — публикации и протоколы; перед решением закажите актуальную выписку ЕГРН на Росреестре: https://rosreestr.gov.ru. Кадастровый номер: ${value}.`);
+    }).catch(() => agentTextMessage('Не получилось обратиться к реестру. Откройте НСПД вручную: https://nspd.gov.ru — и вставьте кадастровый номер.')).finally(showAgentComposer);
   });
   cancel.addEventListener('click', showAgentComposer); inputArea.appendChild(form);
 }
@@ -1364,6 +1404,12 @@ function saveRoute(strategy, stepIndex = 0, extra = {}) {
 }
 
 function getRouteStepGuide(step) {
+  if (/Дальневосточн|Арктическ.*гектар|надальнийвосток\.рф|стопарктика\.рф/i.test(step)) {
+    return '<div class="route-guide"><strong>Куда идти:</strong> ' + externalLink('https://надальнийвосток.рф', 'официальная программа «Гектар»') + '. Выберите регион и участок на карте, затем проверьте условия подачи в своём регионе.</div>';
+  }
+  if (/Федресурс|ЕФРСБ|банкротств/i.test(step)) {
+    return '<div class="route-guide"><strong>Куда идти:</strong> ' + externalLink('https://bankrot.fedresurs.ru', 'ЕФРСБ / Федресурс') + '. Найдите сообщение о торгах и переходите на электронную площадку только из карточки конкретного лота.</div>';
+  }
   if (/НСПД/.test(step)) {
     return '<div class="route-guide"><strong>Куда идти:</strong> <a href="https://nspd.gov.ru" target="_blank" rel="noopener noreferrer">НСПД</a>. Найдите район или кадастровый квартал, включите нужные слои и сохраните номер либо скрин выбранного места.</div>';
   }
@@ -1371,10 +1417,10 @@ function getRouteStepGuide(step) {
     return '<div class="route-guide"><strong>Куда идти:</strong> <a href="https://torgi.gov.ru" target="_blank" rel="noopener noreferrer">ГИС Торги</a>. Выберите регион, тип имущества «земельный участок» и сохраните ссылку на лот, срок подачи и размер задатка.</div>';
   }
   if (/администрац|местный орган управления землёй/.test(step)) {
-    return '<div class="route-guide"><strong>Куда идти:</strong> на сайт администрации района или в МФЦ. Сначала откройте раздел «Имущество и земельные отношения» и сверяйте форму заявления именно для вашего муниципалитета.</div>';
+    return '<div class="route-guide"><strong>Куда идти:</strong> на сайт администрации района или в МФЦ. Сначала откройте раздел «Имущество и земельные отношения» и сверяйте форму заявления именно для вашего муниципалитета.</div>' + officialLinksFor('Госуслуги');
   }
   if (/ПЗЗ|Генплан|ЗОУИТ/.test(step)) {
-    return '<div class="route-guide"><strong>Что проверить:</strong> территориальную зону, допустимый ВРИ, красные линии и ограничения. Обычно ПЗЗ и Генплан опубликованы на сайте администрации в разделе градостроительства.</div>';
+    return '<div class="route-guide"><strong>Что проверить:</strong> территориальную зону, допустимый ВРИ, красные линии и ограничения. Обычно ПЗЗ и Генплан опубликованы на сайте администрации в разделе градостроительства.</div>' + officialLinksFor('ПЗЗ');
   }
   if (/Росреестр|ЕГРН/.test(step)) {
     return '<div class="route-guide"><strong>Где проверить сведения:</strong> на <a href="https://rosreestr.gov.ru" target="_blank" rel="noopener noreferrer">сайте Росреестра</a> или через МФЦ. Сохраните выписку и дату, на которую она получена.</div>';
@@ -2004,6 +2050,7 @@ function renderStrategyCards(strategies) {
               <p class="desc">${s.desc}</p>
               <div class="steps-title">Действуйте по порядку</div>
               ${stepsHtml}
+              ${officialLinksFor(s.steps.join(' '), 'official-links strategy-official-links')}
               ${s.warning ? `<div class="strategy-warning">${s.warning}</div>` : ''}
             </div>
           </div>`;
