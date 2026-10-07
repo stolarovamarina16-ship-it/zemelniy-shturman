@@ -2503,7 +2503,8 @@ document.getElementById('landing-start').addEventListener('click', () => {
   landing.classList.add('landing-hide');
   setTimeout(() => {
     landing.style.display = 'none';
-    showDashboard('home');
+    appRoot.classList.add('visible', 'agent-room-open');
+    startRouter();
   }, 300);
 });
 

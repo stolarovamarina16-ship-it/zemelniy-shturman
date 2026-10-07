@@ -737,10 +737,26 @@ body {
 
 .landing {
   width: 100%;
-  max-width: 640px;
+  max-width: 700px;
   margin: 0 auto;
-  padding: 56px 20px 40px;
+  padding: 64px 28px 44px;
+  position: relative;
   transition: opacity .35s var(--ease-out), transform .35s var(--ease-out);
+}
+
+.landing::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 28px 0 auto;
+  height: 420px;
+  pointer-events: none;
+  opacity: .55;
+  background:
+    linear-gradient(90deg, transparent 0 49.8%, rgba(92,138,90,.15) 50% 50.2%, transparent 50.4%),
+    linear-gradient(0deg, transparent 0 49.8%, rgba(201,123,46,.13) 50% 50.2%, transparent 50.4%);
+  background-size: 74px 74px;
+  mask-image: radial-gradient(ellipse at center, black 5%, transparent 68%);
 }
 
 .landing.landing-hide {
@@ -767,11 +783,21 @@ body {
   background: linear-gradient(155deg, var(--forest-700), var(--forest-900));
   border: 1px solid rgba(232,163,61,.3);
   box-shadow: var(--shadow-md);
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  position: relative;
+}
+
+.landing-icon::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  border: 1px solid rgba(201,123,46,.22);
+  border-radius: 21px;
+  transform: rotate(8deg);
 }
 
 .landing-badge {
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -780,40 +806,49 @@ body {
   border: 1px solid rgba(92,138,90,.35);
   border-radius: 99px;
   padding: 6px 14px;
-  margin-bottom: 18px;
+  margin-bottom: 19px;
 }
 
 .landing-title {
   font-family: 'Fraunces', Georgia, serif;
-  font-size: 42px;
+  font-size: clamp(38px, 6vw, 58px);
   font-weight: 600;
-  letter-spacing: -.5px;
+  letter-spacing: -1.6px;
   color: var(--forest-950);
-  line-height: 1.1;
-  margin-bottom: 16px;
+  line-height: 1.02;
+  max-width: 650px;
+  margin-bottom: 19px;
+}
+
+.landing-title em {
+  color: var(--ochre);
+  font-style: italic;
+  white-space: nowrap;
 }
 
 .landing-lead {
   font-size: 17px;
   line-height: 1.6;
   color: var(--text-muted);
-  max-width: 440px;
-  margin-bottom: 30px;
+  max-width: 520px;
+  margin-bottom: 27px;
 }
 
 .landing-cta {
   background: linear-gradient(155deg, var(--ochre-light), var(--ochre));
   color: var(--forest-950);
   border: none;
-  border-radius: 26px;
-  padding: 16px 34px;
+  border-radius: 12px;
+  padding: 17px 25px;
   font-family: inherit;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   cursor: pointer;
   box-shadow: var(--shadow-md);
   transition: transform .16s var(--ease-out), box-shadow .16s;
 }
+
+.landing-cta span { margin-left: 8px; font-size: 18px; vertical-align: -1px; }
 
 .landing-cta:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .landing-cta:active { transform: translateY(0); }
@@ -829,7 +864,7 @@ body {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--forest-700);
-  margin-top: 8px;
+  margin-top: 7px;
 }
 
 .landing-secondary-link {
@@ -839,7 +874,7 @@ body {
   text-decoration: underline;
   text-underline-offset: 3px;
   margin-top: 18px;
-  margin-bottom: 52px;
+  margin-bottom: 46px;
   transition: color .15s;
 }
 
@@ -894,6 +929,16 @@ body {
   letter-spacing: -.2px;
 }
 
+.landing-eyebrow {
+  color: var(--ochre);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1.25px;
+  line-height: 1.3;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
 .landing-cards {
   display: flex;
   flex-direction: column;
@@ -925,6 +970,8 @@ body {
   line-height: 1.55;
   color: var(--text);
 }
+
+.landing-card p strong { color: var(--forest-900); }
 
 .landing-list {
   list-style: none;
@@ -979,7 +1026,7 @@ body {
 .decision-points strong {
   font-family: 'Fraunces', Georgia, serif;
   color: var(--ochre);
-  font-size: 17px;
+  font-size: 15px;
 }
 
 .decision-points span {
@@ -1312,8 +1359,8 @@ body {
   .service-guide, .municipality-plan, .submission-readiness, .portfolio-panel, .auction-panel { margin-left: 0; max-width: 100%; padding: 16px; }
   .header-portfolio-btn { top: 16px; right: 14px; }
 
-  .landing { padding: 36px 18px 28px; }
-  .landing-title { font-size: 30px; }
+  .landing { padding: 42px 18px 28px; }
+  .landing-title { font-size: 35px; letter-spacing: -1px; }
   .landing-lead { font-size: 15.5px; }
   .landing-cta { width: 100%; padding: 15px 20px; }
   .landing-block { margin-bottom: 32px; padding-top: 28px; }
