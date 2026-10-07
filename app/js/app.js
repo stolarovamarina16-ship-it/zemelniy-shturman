@@ -1455,9 +1455,8 @@ function continueSavedCase() {
 }
 
 function startNewCase() {
-  activeCaseId = '';
-  activeCase = emptyCase();
-  startRouter();
+  closeLandBot();
+  openCaseWorkspace();
 }
 
 function openPortfolio() {
@@ -2166,17 +2165,308 @@ function startRouter() {
 }
 
 // ===== ЗАПУСК =====
-// Роутер стартует по кнопке «Начать» на лендинге, не сразу при загрузке страницы
+// Вход устроен как личный кабинет: создание и ведение дела происходят на
+// главном экране, а диалог с ЗемляБотом открывается только по необходимости.
 const landing = document.getElementById('landing');
 const appRoot = document.querySelector('.app');
+const dashboard = document.getElementById('dashboard');
+const cabinetHome = document.getElementById('cabinet-home');
+const caseWorkspace = document.getElementById('case-workspace');
+const cabinetListScreen = document.getElementById('cabinet-list-screen');
+const caseSetupContent = document.getElementById('case-setup-content');
+let workspaceCaseId = '';
+
+function hideCabinetScreens() {
+  cabinetHome.hidden = true;
+  caseWorkspace.hidden = true;
+  cabinetListScreen.hidden = true;
+}
+
+function setDashboardNav(page) {
+  document.querySelectorAll('.dashboard-nav-btn').forEach(button => {
+    button.classList.toggle('is-active', button.dataset.dashboardPage === page);
+  });
+}
+
+function showDashboard(page = 'home') {
+  appRoot.classList.remove('visible', 'agent-room-open');
+  dashboard.classList.add('visible');
+  hideCabinetScreens();
+  setDashboardNav(page);
+  if (page === 'home') {
+    cabinetHome.hidden = false;
+    renderCabinetHome();
+  }
+  if (page === 'cases') renderCabinetList('cases');
+  if (page === 'auctions') renderCabinetList('auctions');
+}
+
+function openLandBot() {
+  dashboard.classList.remove('visible');
+  appRoot.classList.add('visible', 'agent-room-open');
+  startAgent();
+}
+
+function closeLandBot() {
+  appRoot.classList.remove('visible', 'agent-room-open');
+  showDashboard('home');
+}
+
+function casePrioritiesLabel(item) {
+  const values = casePriorities(item);
+  return values.length ? values.slice(0, 3).join(' · ') : 'Критерии ещё не заданы';
+}
+
+function renderCabinetHome() {
+  const box = document.getElementById('cabinet-current-case');
+  box.innerHTML = '';
+  const label = document.createElement('span');
+  label.className = 'cabinet-card-label';
+  label.textContent = 'ТЕКУЩЕЕ ДЕЛО';
+  const title = document.createElement('h3');
+  const description = document.createElement('p');
+  const action = document.createElement('button');
+  action.type = 'button';
+  action.className = 'cabinet-secondary-btn';
+  if (hasCase()) {
+    title.textContent = caseTitle(activeCase);
+    description.textContent = [activeCase.region, activeCase.plotSize, casePrioritiesLabel(activeCase)].filter(Boolean).join(' · ');
+    action.textContent = 'Открыть дело';
+    action.addEventListener('click', () => openCaseWorkspace(activeCase.id));
+  } else {
+    title.textContent = 'Пока нет земельного дела';
+    description.textContent = 'Создайте первое дело: оно сохранит цель, регион и критерии поиска в одном месте.';
+    action.textContent = 'Создать первое дело';
+    action.addEventListener('click', () => openCaseWorkspace());
+  }
+  box.append(label, title, description, action);
+}
+
+function renderCabinetList(type) {
+  hideCabinetScreens();
+  cabinetListScreen.hidden = false;
+  cabinetListScreen.innerHTML = '';
+  const title = document.createElement('h2');
+  const lead = document.createElement('p');
+  const list = document.createElement('div');
+  list.className = 'cabinet-record-list';
+  if (type === 'cases') {
+    title.textContent = 'Мои земельные дела';
+    lead.textContent = 'Каждое дело хранит свои критерии, маршрут и результаты проверок.';
+    if (!cases.length) {
+      const empty = document.createElement('div');
+      empty.className = 'cabinet-empty';
+      empty.textContent = 'Пока нет дел. Создайте первое — и Штурман не потеряет ваш контекст.';
+      list.appendChild(empty);
+    } else {
+      cases.slice().reverse().forEach(item => {
+        const card = document.createElement('article');
+        card.className = 'cabinet-record';
+        const heading = document.createElement('strong'); heading.textContent = caseTitle(item);
+        const meta = document.createElement('span'); meta.textContent = [item.region, item.plotSize, casePrioritiesLabel(item)].filter(Boolean).join(' · ');
+        const open = document.createElement('button'); open.type = 'button'; open.textContent = 'Открыть дело';
+        open.addEventListener('click', () => openCaseWorkspace(item.id));
+        card.append(heading, meta, open); list.appendChild(card);
+      });
+    }
+  } else {
+    title.textContent = 'Торги';
+    lead.textContent = 'Здесь будут сохранённые лоты, их риски и ваш личный предел ставки.';
+    if (!auctionLots.length) {
+      const empty = document.createElement('div');
+      empty.className = 'cabinet-empty';
+      empty.textContent = 'Пока нет добавленных лотов. Откройте ЗемляБот, когда понадобится разобрать конкретные торги.';
+      list.appendChild(empty);
+    } else {
+      auctionLots.slice().reverse().forEach(lot => {
+        const card = document.createElement('article');
+        card.className = 'cabinet-record';
+        const heading = document.createElement('strong'); heading.textContent = lot.title || 'Лот на торгах';
+        const meta = document.createElement('span'); meta.textContent = [lot.status, lot.deadline].filter(Boolean).join(' · ');
+        card.append(heading, meta); list.appendChild(card);
+      });
+    }
+  }
+  const back = document.createElement('button');
+  back.type = 'button'; back.className = 'back-to-cabinet'; back.textContent = '← Вернуться в обзор';
+  back.addEventListener('click', () => showDashboard('home'));
+  cabinetListScreen.append(title, lead, list, back);
+}
+
+function openCaseWorkspace(id = '') {
+  workspaceCaseId = id;
+  hideCabinetScreens();
+  caseWorkspace.hidden = false;
+  setDashboardNav('cases');
+  renderCaseSetup(id ? cases.find(item => item.id === id) : null);
+}
+
+function renderCaseSetup(record) {
+  const draft = { ...emptyCase(), ...(record || {}) };
+  caseSetupContent.innerHTML = '';
+  const title = document.createElement('h1');
+  title.textContent = record ? 'Настройте земельное дело' : 'Создайте земельное дело';
+  const lead = document.createElement('p');
+  lead.className = 'case-setup-lead';
+  lead.textContent = 'Сначала задайте цель и рамки поиска. Это основа дела; к ЗемляБоту перейдём, когда потребуется разбор вопроса или документа.';
+  const form = document.createElement('form');
+  form.className = 'case-setup-form';
+  const addSection = (headingText, noteText) => {
+    const section = document.createElement('section');
+    section.className = 'case-setup-section';
+    const heading = document.createElement('h2'); heading.textContent = headingText;
+    const note = document.createElement('p'); note.textContent = noteText;
+    section.append(heading, note); form.appendChild(section);
+    return section;
+  };
+
+  const basics = addSection('1. Цель и направление', 'Выберите понятный вариант. Штурман подскажет, что потом проверить по ПЗЗ.');
+  const goalGrid = document.createElement('div'); goalGrid.className = 'case-goal-grid';
+  const goals = [
+    ['home', 'Дом для жизни', 'ИЖС', 'Дом для проживания', 'ИЖС'],
+    ['dacha', 'Дача или сад', 'Ведение садоводства', 'Дача / сад', 'Ведение садоводства'],
+    ['lph', 'Личное хозяйство', 'ЛПХ на приусадебном участке', 'Личное подсобное хозяйство', 'ЛПХ на приусадебном участке'],
+    ['garden', 'Огород', 'Ведение огородничества', 'Огородничество', 'Ведение огородничества'],
+    ['farm', 'Сено или выпас', 'Сельскохозяйственное использование', 'Сенокошение / выпас', 'Сенокошение или выпас'],
+    ['business', 'Дело или сервис', 'Точный ВРИ проверим по ПЗЗ', 'Коммерческое использование', 'Уточнить по ПЗЗ']
+  ];
+  const savedPreset = draft.goalPreset || goals.find(goal => goal[4] === draft.vri || goal[3] === draft.goal)?.[0] || (/сад|дач/i.test(draft.goal || '') ? 'dacha' : '');
+  const goalInputs = [];
+  goals.forEach(([idValue, name, note, goal, vri]) => {
+    const label = document.createElement('label'); label.className = 'case-goal-choice';
+    const input = document.createElement('input'); input.type = 'radio'; input.name = 'case-goal'; input.value = idValue; input.required = true; input.checked = idValue === savedPreset;
+    const nameNode = document.createElement('strong'); nameNode.textContent = name;
+    const noteNode = document.createElement('span'); noteNode.textContent = note;
+    label.append(input, nameNode, noteNode); goalInputs.push({ input, label, goal, vri, idValue }); goalGrid.appendChild(label);
+  });
+  const refreshGoals = () => goalInputs.forEach(item => item.label.classList.toggle('is-selected', item.input.checked));
+  goalInputs.forEach(item => item.input.addEventListener('change', refreshGoals));
+  refreshGoals(); basics.appendChild(goalGrid);
+
+  const regionLabel = document.createElement('label'); regionLabel.className = 'case-setup-field'; regionLabel.textContent = 'Регион';
+  const region = document.createElement('select'); region.className = 'tool-select'; region.required = true;
+  const blankRegion = document.createElement('option'); blankRegion.value = ''; blankRegion.textContent = 'Выберите регион'; region.appendChild(blankRegion);
+  REGIONS.forEach(item => {
+    const option = document.createElement('option'); option.value = item.id; option.textContent = item.name;
+    option.selected = item.id === (draft.regionCode || REGIONS.find(regionItem => regionItem.name === draft.region)?.id); region.appendChild(option);
+  });
+  regionLabel.appendChild(region); basics.appendChild(regionLabel);
+
+  const strategyLabel = document.createElement('label'); strategyLabel.className = 'case-setup-field'; strategyLabel.textContent = 'Предварительный путь';
+  const strategy = document.createElement('select'); strategy.className = 'tool-select';
+  [['', 'Пока не знаю — Штурман поможет выбрать'], ['1', 'Сразу в собственность без торгов'], ['2', 'Аренда без торгов с возможным выкупом'], ['3', 'Аренда при зарегистрированном доме'], ['4', 'Уже арендованный участок: выкуп или долгий срок'], ['5', 'Сенокошение или выпас'], ['6', 'Безвозмездное пользование для специалиста'], ['7', 'Дальневосточный / Арктический гектар'], ['8', 'Прирезка к своему участку'], ['9', 'Торги: собственность'], ['10', 'Торги: аренда'], ['11', 'Торги по банкротству']].forEach(([value, text]) => {
+    const option = document.createElement('option'); option.value = value; option.textContent = text; option.selected = value === String(draft.strategyPreference || ''); strategy.appendChild(option);
+  });
+  strategyLabel.appendChild(strategy); basics.appendChild(strategyLabel);
+
+  const location = addSection('2. Где и что искать', 'Эти ответы станут фильтрами для поиска и проверки участка.');
+  const fieldRow = document.createElement('div'); fieldRow.className = 'case-setup-row';
+  const textField = (labelText, type, value, placeholder, min, max) => {
+    const label = document.createElement('label'); label.className = 'case-setup-field'; label.textContent = labelText;
+    const input = document.createElement('input'); input.type = type; input.value = value || ''; input.placeholder = placeholder;
+    if (min) input.min = min; if (max) input.max = max; label.appendChild(input); return { label, input };
+  };
+  const centerField = textField('Город или точка отсчёта', 'text', draft.searchCenter, 'Например: Саратов');
+  const radiusField = textField('Радиус поиска, км', 'number', draft.searchRadius, 'Например: 60', '1', '300');
+  fieldRow.append(centerField.label, radiusField.label); location.appendChild(fieldRow);
+  const sizeLabel = document.createElement('div'); sizeLabel.className = 'case-setup-label'; sizeLabel.textContent = 'Площадь';
+  const sizeGrid = document.createElement('div'); sizeGrid.className = 'case-size-grid';
+  const sizeInputs = [];
+  ['до 4 соток', '4–6 соток', '6–8 соток', '8–10 соток', '10–12 соток', '12–15 соток'].forEach(value => {
+    const label = document.createElement('label'); label.className = 'case-size-choice';
+    const input = document.createElement('input'); input.type = 'radio'; input.name = 'case-size'; input.value = value; input.checked = draft.plotSize === value;
+    const span = document.createElement('span'); span.textContent = value; label.append(input, span); sizeInputs.push({ input, label }); sizeGrid.appendChild(label);
+  });
+  const refreshSizes = () => sizeInputs.forEach(item => item.label.classList.toggle('is-selected', item.input.checked));
+  sizeInputs.forEach(item => item.input.addEventListener('change', refreshSizes)); refreshSizes();
+  location.append(sizeLabel, sizeGrid);
+
+  const prioritySection = addSection('3. Что для вас важно', 'Отметьте всё, что Штурман должен учитывать в первую очередь.');
+  const priorityGrid = document.createElement('div'); priorityGrid.className = 'case-priority-grid';
+  const oldPriorities = casePriorities(draft);
+  const priorityInputs = [];
+  ['Электричество с подтверждённой возможностью подключения', 'Близость к городу', 'Круглогодичный подъезд', 'Вода', 'Газ', 'Тишина / природа', 'Минимальные расходы'].forEach(value => {
+    const label = document.createElement('label'); label.className = 'case-priority-choice';
+    const input = document.createElement('input'); input.type = 'checkbox'; input.value = value; input.checked = oldPriorities.includes(value);
+    const span = document.createElement('span'); span.textContent = value; label.append(input, span); priorityInputs.push(input); priorityGrid.appendChild(label);
+  });
+  const travelLabel = document.createElement('label'); travelLabel.className = 'case-setup-field'; travelLabel.textContent = 'Предел времени в дороге';
+  const travel = document.createElement('select'); travel.className = 'tool-select';
+  [['', 'Не учитывать'], ['30', 'До 30 минут'], ['45', 'До 45 минут'], ['60', 'До 60 минут'], ['90', 'До 90 минут'], ['120', 'До 120 минут']].forEach(([value, text]) => {
+    const option = document.createElement('option'); option.value = value; option.textContent = text; option.selected = value === String(draft.travelTime || ''); travel.appendChild(option);
+  });
+  travelLabel.appendChild(travel); prioritySection.append(priorityGrid, travelLabel);
+
+  const municipalitySection = addSection('4. Муниципалитет', 'Можно выбрать из доступного справочника или вписать свой. Это направление первой проверки, а не обещание выдачи земли.');
+  const municipalityLabel = document.createElement('label'); municipalityLabel.className = 'case-setup-field'; municipalityLabel.textContent = 'Муниципалитет из списка';
+  const municipality = document.createElement('select'); municipality.className = 'tool-select'; municipalityLabel.appendChild(municipality);
+  const manualMunicipality = textField('Или укажите вручную', 'text', draft.municipality, 'Например: Энгельсский район').input;
+  const manualLabel = manualMunicipality.parentElement;
+  const authorityField = textField('Администрация / орган (необязательно)', 'text', draft.authorityName, 'Например: Комитет по имуществу').input;
+  const authorityLabel = authorityField.parentElement;
+  municipalitySection.append(municipalityLabel, manualLabel, authorityLabel);
+  const renderMunicipalities = () => {
+    municipality.innerHTML = '';
+    const empty = document.createElement('option'); empty.value = ''; empty.textContent = 'Выберите из списка или укажите вручную'; municipality.appendChild(empty);
+    const directory = MUNICIPALITY_DIRECTORY[region.value];
+    if (!directory) return;
+    directory.entries.forEach(entry => {
+      const option = document.createElement('option'); option.value = entry.name; option.textContent = entry.name; option.selected = !manualMunicipality.value && entry.name === draft.municipality; municipality.appendChild(option);
+    });
+  };
+  municipality.addEventListener('change', () => {
+    const entry = MUNICIPALITY_DIRECTORY[region.value]?.entries.find(item => item.name === municipality.value);
+    if (entry) { manualMunicipality.value = ''; authorityField.value = entry.authority; }
+  });
+  region.addEventListener('change', renderMunicipalities); renderMunicipalities();
+
+  const futureField = textField('План на будущее (необязательно)', 'text', draft.futurePlan, 'Например: арендовать, построить дом и рассмотреть выкуп');
+  form.appendChild(futureField.label);
+  const actions = document.createElement('div'); actions.className = 'case-setup-actions';
+  const save = document.createElement('button'); save.type = 'submit'; save.className = 'cabinet-primary-btn'; save.textContent = 'Сохранить земельное дело';
+  const askBot = document.createElement('button'); askBot.type = 'button'; askBot.className = 'cabinet-secondary-btn'; askBot.textContent = 'Есть вопрос — спросить ЗемляБота';
+  askBot.addEventListener('click', openLandBot);
+  actions.append(save, askBot); form.appendChild(actions);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const goal = goalInputs.find(item => item.input.checked);
+    if (!goal) { goalInputs[0].input.focus(); return; }
+    const selectedPriorities = priorityInputs.filter(input => input.checked).map(input => input.value);
+    if (travel.value) selectedPriorities.push('Время в дороге: до ' + travel.value + ' минут');
+    const selectedRegion = findRegion(region.value);
+    const caseId = record?.id || createLocalId('case');
+    saveCase({
+      ...draft, id: caseId, caseName: draft.caseName || goal.goal,
+      goalPreset: goal.idValue, goal: goal.goal, vri: goal.vri, strategyPreference: strategy.value,
+      regionCode: region.value, region: selectedRegion?.name || '', searchCenter: centerField.input.value.trim(),
+      searchRadius: radiusField.input.value.trim(), plotSize: sizeInputs.find(item => item.input.checked)?.input.value || '',
+      priorities: selectedPriorities, priorityOne: selectedPriorities[0] || '', priorityTwo: selectedPriorities[1] || '',
+      travelTime: travel.value, travelTimePriority: Boolean(travel.value),
+      allSeasonRoad: selectedPriorities.includes('Круглогодичный подъезд'), municipality: manualMunicipality.value.trim() || municipality.value,
+      authorityName: authorityField.value.trim(), futurePlan: futureField.input.value.trim()
+    });
+    showDashboard('home');
+  });
+  caseSetupContent.append(title, lead, form);
+}
 
 document.getElementById('landing-start').addEventListener('click', () => {
   landing.classList.add('landing-hide');
   setTimeout(() => {
     landing.style.display = 'none';
-    appRoot.classList.add('visible');
-    startAgent();
+    showDashboard('home');
   }, 300);
 });
 
 document.getElementById('portfolio-button').addEventListener('click', openPortfolio);
+document.getElementById('bot-back').addEventListener('click', closeLandBot);
+document.getElementById('open-land-bot').addEventListener('click', openLandBot);
+document.getElementById('dashboard-open-bot').addEventListener('click', openLandBot);
+document.getElementById('dashboard-new-case').addEventListener('click', () => openCaseWorkspace());
+document.getElementById('dashboard-open-cases').addEventListener('click', () => showDashboard('cases'));
+document.getElementById('dashboard-open-auctions').addEventListener('click', () => showDashboard('auctions'));
+document.getElementById('back-to-cabinet').addEventListener('click', () => showDashboard('home'));
+document.getElementById('dashboard-home-link').addEventListener('click', event => { event.preventDefault(); showDashboard('home'); });
+document.querySelectorAll('.dashboard-nav-btn').forEach(button => {
+  button.addEventListener('click', () => showDashboard(button.dataset.dashboardPage));
+});
